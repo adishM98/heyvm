@@ -9,7 +9,8 @@ interface TerminalTabProps {
 	isActive: boolean;
 }
 
-export default function TerminalTab({ vm, isActive }: TerminalTabProps) {
+const TerminalTab = React.memo(
+	function TerminalTab({ vm, isActive }: TerminalTabProps) {
 	const [command, setCommand] = useState('');
 	const [history, setHistory] = useState<Array<{ command: string; output: string }>>([]);
 	const [executing, setExecuting] = useState(false);
@@ -55,19 +56,11 @@ export default function TerminalTab({ vm, isActive }: TerminalTabProps) {
 				</Box>
 			)}
 
-			{/* Command history */}
+			{/* Command history - scrollback of last 20 commands */}
 			<Box flexDirection="column" flexGrow={1} marginBottom={1}>
-				{history.length === 0 && (
-					<Box>
-						<Text dimColor>
-							Terminal ready. Type commands and press Enter to execute.
-						</Text>
-					</Box>
-				)}
-
-				{history.map((entry, index) => (
+				{history.slice(-20).map((entry, index) => (
 					<Box key={index} flexDirection="column" marginBottom={1}>
-						<Text color="cyan">
+						<Text bold color="cyan">
 							$ {entry.command}
 						</Text>
 						{entry.output && (
@@ -77,15 +70,15 @@ export default function TerminalTab({ vm, isActive }: TerminalTabProps) {
 				))}
 			</Box>
 
-			{/* Command input */}
-			<Box marginBottom={1}>
-				<Text color="cyan">$ </Text>
+			{/* Command input - shell-like prompt */}
+			<Box>
+				<Text bold color="cyan">$ </Text>
 				{vm.status === 'connected' && !executing && (
 					<TextInput
 						value={command}
 						onChange={setCommand}
 						onSubmit={handleSubmit}
-						placeholder="Enter command..."
+						placeholder=""
 					/>
 				)}
 				{executing && (
@@ -95,13 +88,16 @@ export default function TerminalTab({ vm, isActive }: TerminalTabProps) {
 					<Text dimColor>(not connected)</Text>
 				)}
 			</Box>
-
-			{/* Help text */}
-			<Box>
-				<Text dimColor>
-					Note: This is a simple command executor. For full PTY support, use Phase 2+ features.
-				</Text>
-			</Box>
 		</Box>
 	);
-}
+	},
+	(prevProps, nextProps) => {
+		return (
+			prevProps.isActive === nextProps.isActive &&
+			prevProps.vm.id === nextProps.vm.id &&
+			prevProps.vm.status === nextProps.vm.status
+		);
+	}
+);
+
+export default TerminalTab;

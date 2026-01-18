@@ -13,7 +13,8 @@ interface FilesTabProps {
 
 type Pane = 'local' | 'remote';
 
-export default function FilesTab({ vm, isActive }: FilesTabProps) {
+const FilesTab = React.memo(
+	function FilesTab({ vm, isActive }: FilesTabProps) {
 	const [activePane, setActivePane] = useState<Pane>('local');
 	const [localPath, setLocalPath] = useState(process.env.HOME || '/');
 	const [remotePath, setRemotePath] = useState('/');
@@ -211,56 +212,56 @@ export default function FilesTab({ vm, isActive }: FilesTabProps) {
 		const currentFiles = activePane === 'local' ? getFilteredLocalFiles() : getFilteredRemoteFiles();
 		if (input === 'j' || key.downArrow) {
 			if (activePane === 'local') {
-				setLocalSelectedIndex(prev => {
-					const newIndex = Math.min(prev + 1, currentFiles.length - 1);
-					// Auto-scroll down if selection moves below visible area
-					setLocalScrollOffset(scrollOffset => {
-						if (newIndex >= scrollOffset + maxVisibleFiles) {
-							return newIndex - maxVisibleFiles + 1;
-						}
-						return scrollOffset;
-					});
-					return newIndex;
-				});
+				const currentIndex = localSelectedIndex;
+				const currentScrollOffset = localScrollOffset;
+				const newIndex = Math.min(currentIndex + 1, currentFiles.length - 1);
+				// Auto-scroll down if selection moves below visible area
+				const newScrollOffset = newIndex >= currentScrollOffset + maxVisibleFiles
+					? newIndex - maxVisibleFiles + 1
+					: currentScrollOffset;
+				setLocalSelectedIndex(newIndex);
+				if (newScrollOffset !== currentScrollOffset) {
+					setLocalScrollOffset(newScrollOffset);
+				}
 			} else {
-				setRemoteSelectedIndex(prev => {
-					const newIndex = Math.min(prev + 1, currentFiles.length - 1);
-					// Auto-scroll down if selection moves below visible area
-					setRemoteScrollOffset(scrollOffset => {
-						if (newIndex >= scrollOffset + maxVisibleFiles) {
-							return newIndex - maxVisibleFiles + 1;
-						}
-						return scrollOffset;
-					});
-					return newIndex;
-				});
+				const currentIndex = remoteSelectedIndex;
+				const currentScrollOffset = remoteScrollOffset;
+				const newIndex = Math.min(currentIndex + 1, currentFiles.length - 1);
+				// Auto-scroll down if selection moves below visible area
+				const newScrollOffset = newIndex >= currentScrollOffset + maxVisibleFiles
+					? newIndex - maxVisibleFiles + 1
+					: currentScrollOffset;
+				setRemoteSelectedIndex(newIndex);
+				if (newScrollOffset !== currentScrollOffset) {
+					setRemoteScrollOffset(newScrollOffset);
+				}
 			}
 		}
 		if (input === 'k' || key.upArrow) {
 			if (activePane === 'local') {
-				setLocalSelectedIndex(prev => {
-					const newIndex = Math.max(prev - 1, 0);
-					// Auto-scroll up if selection moves above visible area
-					setLocalScrollOffset(scrollOffset => {
-						if (newIndex < scrollOffset) {
-							return newIndex;
-						}
-						return scrollOffset;
-					});
-					return newIndex;
-				});
+				const currentIndex = localSelectedIndex;
+				const currentScrollOffset = localScrollOffset;
+				const newIndex = Math.max(currentIndex - 1, 0);
+				// Auto-scroll up if selection moves above visible area
+				const newScrollOffset = newIndex < currentScrollOffset
+					? newIndex
+					: currentScrollOffset;
+				setLocalSelectedIndex(newIndex);
+				if (newScrollOffset !== currentScrollOffset) {
+					setLocalScrollOffset(newScrollOffset);
+				}
 			} else {
-				setRemoteSelectedIndex(prev => {
-					const newIndex = Math.max(prev - 1, 0);
-					// Auto-scroll up if selection moves above visible area
-					setRemoteScrollOffset(scrollOffset => {
-						if (newIndex < scrollOffset) {
-							return newIndex;
-						}
-						return scrollOffset;
-					});
-					return newIndex;
-				});
+				const currentIndex = remoteSelectedIndex;
+				const currentScrollOffset = remoteScrollOffset;
+				const newIndex = Math.max(currentIndex - 1, 0);
+				// Auto-scroll up if selection moves above visible area
+				const newScrollOffset = newIndex < currentScrollOffset
+					? newIndex
+					: currentScrollOffset;
+				setRemoteSelectedIndex(newIndex);
+				if (newScrollOffset !== currentScrollOffset) {
+					setRemoteScrollOffset(newScrollOffset);
+				}
 			}
 		}
 
@@ -307,9 +308,10 @@ export default function FilesTab({ vm, isActive }: FilesTabProps) {
 					return (
 						<Box key={actualIndex}>
 							<Text>
-								{isSelected ? '>' : ' '}{' '}
+								<Text bold color={isSelected ? 'cyan' : undefined}>{isSelected ? '▶ ' : '  '}</Text>
 								{file.isDir ? '📁' : '📄'}{' '}
-								<Text bold={isSelected}>{file.name}</Text>{' '}
+								<Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>{file.name}</Text>
+								{'  '}
 								<Text dimColor>{formatFileSize(file.size)}</Text>
 							</Text>
 						</Box>
@@ -409,4 +411,14 @@ export default function FilesTab({ vm, isActive }: FilesTabProps) {
 			</Box>
 		</Box>
 	);
-}
+	},
+	(prevProps, nextProps) => {
+		return (
+			prevProps.isActive === nextProps.isActive &&
+			prevProps.vm.id === nextProps.vm.id &&
+			prevProps.vm.status === nextProps.vm.status
+		);
+	}
+);
+
+export default FilesTab;

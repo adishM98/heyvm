@@ -154,21 +154,30 @@ export default function VMListScreen({ selectedVM, onSelectVM, isActive, onVMDel
 						return (
 							<Box key={vm.id} marginBottom={0}>
 								<Text>
-									{isCursor ? '>' : ' '}{' '}
+									{isCursor ? '▶ ' : '  '}
 									<Text color={isSelected ? 'cyan' : getStatusColor(vm.status)}>
 										{getStatusSymbol(vm.status)}
 									</Text>{' '}
-									<Text bold={isCursor || isSelected}>{vm.name}</Text>{' '}
+									<Text bold={isCursor || isSelected}>{vm.name}</Text>
+									{'  '}
 									<Text dimColor>
-										({vm.username}@{vm.host}:{vm.port})
-									</Text>{' '}
-									<Text dimColor>
-										[{vm.auth.type === 'key' ? 'SSH Key' : 'Password'}]
+										{vm.username}@{vm.host}
 									</Text>
 								</Text>
 							</Box>
 						);
 					})}
+				</Box>
+			)}
+
+			{/* Legend */}
+			{vms.length > 0 && (
+				<Box marginBottom={1}>
+					<Text dimColor>
+						<Text color="green">●</Text> connected  {' '}
+						<Text color="gray">○</Text> disconnected  {' '}
+						<Text color="yellow">◐</Text> connecting
+					</Text>
 				</Box>
 			)}
 

@@ -9,7 +9,7 @@ interface OverviewTabProps {
 	onVMUpdated?: () => Promise<void>;
 }
 
-export default function OverviewTab({ vm, isActive, onVMUpdated }: OverviewTabProps) {
+export default React.memo(function OverviewTab({ vm, isActive, onVMUpdated }: OverviewTabProps) {
 	const [connecting, setConnecting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
@@ -87,64 +87,52 @@ export default function OverviewTab({ vm, isActive, onVMUpdated }: OverviewTabPr
 			)}
 
 			{/* VM Information */}
-			<Box flexDirection="column" marginBottom={1}>
-				<Text bold underline>VM Information</Text>
+			<Box flexDirection="column" marginBottom={2}>
+				<Text bold>Connection Details</Text>
 				<Box marginTop={1}>
-					<Box width={20}>
-						<Text dimColor>Name:</Text>
-					</Box>
-					<Text>{vm.name}</Text>
-				</Box>
-				<Box>
-					<Box width={20}>
+					<Box width={16}>
 						<Text dimColor>Host:</Text>
 					</Box>
-					<Text>{vm.host}</Text>
+					<Text>{vm.host}:{vm.port}</Text>
 				</Box>
 				<Box>
-					<Box width={20}>
-						<Text dimColor>Port:</Text>
-					</Box>
-					<Text>{vm.port}</Text>
-				</Box>
-				<Box>
-					<Box width={20}>
+					<Box width={16}>
 						<Text dimColor>Username:</Text>
 					</Box>
 					<Text>{vm.username}</Text>
 				</Box>
 				<Box>
-					<Box width={20}>
-						<Text dimColor>Auth Method:</Text>
+					<Box width={16}>
+						<Text dimColor>Auth:</Text>
 					</Box>
-					<Text>{vm.auth.type === 'key' ? 'SSH Key' : 'Password'}</Text>
+					<Text dimColor>{vm.auth.type === 'key' ? 'SSH Key' : 'Password'}</Text>
 				</Box>
 				{vm.auth.type === 'key' && vm.auth.keyPath && (
 					<Box>
-						<Box width={20}>
-							<Text dimColor>Key Path:</Text>
+						<Box width={16}>
+							<Text dimColor>Key:</Text>
 						</Box>
-						<Text>{vm.auth.keyPath}</Text>
+						<Text dimColor>{vm.auth.keyPath}</Text>
 					</Box>
 				)}
 			</Box>
 
 			{/* Status */}
-			<Box flexDirection="column" marginBottom={1}>
-				<Text bold underline>Status</Text>
+			<Box flexDirection="column" marginBottom={2}>
+				<Text bold>Status</Text>
 				<Box marginTop={1}>
-					<Box width={20}>
+					<Box width={16}>
 						<Text dimColor>Connection:</Text>
 					</Box>
-					<Text color={getStatusColor(vm.status)}>
+					<Text bold color={getStatusColor(vm.status)}>
 						{vm.status.toUpperCase()}
 					</Text>
 				</Box>
 				<Box>
-					<Box width={20}>
+					<Box width={16}>
 						<Text dimColor>Last Seen:</Text>
 					</Box>
-					<Text>
+					<Text dimColor>
 						{vm.lastSeen ? new Date(vm.lastSeen).toLocaleString() : 'Never'}
 					</Text>
 				</Box>
@@ -152,20 +140,19 @@ export default function OverviewTab({ vm, isActive, onVMUpdated }: OverviewTabPr
 
 			{/* Actions */}
 			<Box flexDirection="column">
-				<Text bold underline>Actions</Text>
-				<Box marginTop={1}>
+				<Box>
 					{vm.status === 'disconnected' && (
 						<Text>
-							Press <Text bold>c</Text> to connect
+							Press <Text bold color="cyan">c</Text> to connect
 						</Text>
 					)}
 					{vm.status === 'connected' && (
 						<Text>
-							Press <Text bold>d</Text> to disconnect
+							Press <Text bold color="cyan">d</Text> to disconnect
 						</Text>
 					)}
 				</Box>
 			</Box>
 		</Box>
 	);
-}
+});

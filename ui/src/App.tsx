@@ -41,7 +41,7 @@ export default function App() {
 	const handleSelectVM = (vm: VM) => {
 		setSelectedVM(vm);
 		setActivePaneSide('right');
-		setActiveTab('terminal'); // Always default to terminal
+		setActiveTab('overview'); // Always default to overview
 		// No auto-connect - user must explicitly connect via 'c' key
 	};
 
@@ -51,7 +51,7 @@ export default function App() {
 			setShowAddVMModal(false);
 			setSelectedVM(newVM);
 			setActivePaneSide('right');
-			setActiveTab('terminal');
+			setActiveTab('overview');
 			// No auto-connect - user must explicitly connect via 'c' key
 		} catch (err) {
 			console.error('Failed to add VM:', err);
