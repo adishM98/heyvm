@@ -13,7 +13,7 @@ interface VMDetailScreenProps {
 	onVMUpdated?: () => Promise<void>;
 }
 
-export default function VMDetailScreen({ vm, activeTab, onTabChange, isActive, onVMUpdated }: VMDetailScreenProps) {
+export default React.memo(function VMDetailScreen({ vm, activeTab, onTabChange, isActive, onVMUpdated }: VMDetailScreenProps) {
 	// Tab state is now controlled by parent (no local state or key handlers)
 
 	const getStatusColor = () => {
@@ -110,4 +110,4 @@ export default function VMDetailScreen({ vm, activeTab, onTabChange, isActive, o
 			</Box>
 		</Box>
 	);
-}
+});

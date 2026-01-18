@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Box, Text, useApp, useInput } from 'ink';
 import type { VM, Tab } from './core/types.js';
 import VMListScreen from './screens/VMListScreen.js';
@@ -16,7 +16,7 @@ export default function App() {
 	const { exit } = useApp();
 
 	// Refresh selected VM after state changes
-	const refreshSelectedVM = async () => {
+	const refreshSelectedVM = useCallback(async () => {
 		if (!selectedVM) return;
 
 		try {
@@ -35,7 +35,7 @@ export default function App() {
 		} catch (err) {
 			console.error('Failed to refresh VM:', err);
 		}
-	};
+	}, [selectedVM]);
 
 	// Handlers
 	const handleSelectVM = (vm: VM) => {
@@ -129,7 +129,7 @@ export default function App() {
 						width="35%"
 						flexDirection="column"
 						borderStyle="single"
-						borderColor={activePaneSide === 'left' ? 'cyan' : 'gray'}
+						borderColor="gray"
 					>
 						<VMListScreen
 							selectedVM={selectedVM}
@@ -145,7 +145,7 @@ export default function App() {
 						width="65%"
 						flexDirection="column"
 						borderStyle="single"
-						borderColor={activePaneSide === 'right' ? 'cyan' : 'gray'}
+						borderColor="gray"
 					>
 						{selectedVM ? (
 							<VMDetailScreen

@@ -59,7 +59,7 @@ const TerminalTab = React.memo(
 			{/* Command history - scrollback of last 20 commands */}
 			<Box flexDirection="column" flexGrow={1} marginBottom={1}>
 				{history.slice(-20).map((entry, index) => (
-					<Box key={index} flexDirection="column" marginBottom={1}>
+					<Box key={`${entry.command}-${index}`} flexDirection="column" marginBottom={1}>
 						<Text bold color="cyan">
 							$ {entry.command}
 						</Text>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Box, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
 import * as fs from 'fs';
@@ -20,14 +20,12 @@ const FilesTab = React.memo(
 	const [remotePath, setRemotePath] = useState('/');
 	const [localFiles, setLocalFiles] = useState<FileInfo[]>([]);
 	const [remoteFiles, setRemoteFiles] = useState<FileInfo[]>([]);
-	const [localSelectedIndex, setLocalSelectedIndex] = useState(0);
-	const [remoteSelectedIndex, setRemoteSelectedIndex] = useState(0);
+	const [localState, setLocalState] = useState({ selectedIndex: 0, scrollOffset: 0 });
+	const [remoteState, setRemoteState] = useState({ selectedIndex: 0, scrollOffset: 0 });
 	const [error, setError] = useState<string | null>(null);
 	const [transferring, setTransferring] = useState(false);
 	const [searchMode, setSearchMode] = useState(false);
 	const [searchQuery, setSearchQuery] = useState('');
-	const [localScrollOffset, setLocalScrollOffset] = useState(0);
-	const [remoteScrollOffset, setRemoteScrollOffset] = useState(0);
 
 	// Max visible files in each pane (adjust based on terminal height)
 	// Accounting for header, status bars, etc., roughly 20 files visible
@@ -70,8 +68,7 @@ const FilesTab = React.memo(
 			});
 
 			setLocalFiles(files);
-			setLocalSelectedIndex(0);
-			setLocalScrollOffset(0); // Reset scroll when changing directory
+			setLocalState({ selectedIndex: 0, scrollOffset: 0 }); // Reset scroll when changing directory
 		} catch (err) {
 			setError(`Failed to read local directory: ${err instanceof Error ? err.message : 'Unknown error'}`);
 		}
@@ -94,8 +91,7 @@ const FilesTab = React.memo(
 			}
 
 			setRemoteFiles(files);
-			setRemoteSelectedIndex(0);
-			setRemoteScrollOffset(0); // Reset scroll when changing directory
+			setRemoteState({ selectedIndex: 0, scrollOffset: 0 }); // Reset scroll when changing directory
 		} catch (err) {
 			setError(`Failed to read remote directory: ${err instanceof Error ? err.message : 'Unknown error'}`);
 		}
@@ -103,7 +99,7 @@ const FilesTab = React.memo(
 
 	const handleEnterDirectory = () => {
 		if (activePane === 'local') {
-			const file = localFiles[localSelectedIndex];
+			const file = localFiles[localState.selectedIndex];
 			if (file && file.isDir) {
 				if (file.name === '..') {
 					setLocalPath(path.dirname(localPath));
@@ -112,7 +108,7 @@ const FilesTab = React.memo(
 				}
 			}
 		} else {
-			const file = remoteFiles[remoteSelectedIndex];
+			const file = remoteFiles[remoteState.selectedIndex];
 			if (file && file.isDir) {
 				if (file.name === '..') {
 					setRemotePath(path.dirname(remotePath));
@@ -124,7 +120,7 @@ const FilesTab = React.memo(
 	};
 
 	const handlePushFile = async () => {
-		const file = localFiles[localSelectedIndex];
+		const file = localFiles[localState.selectedIndex];
 		if (!file || file.isDir || file.name === '..') return;
 
 		try {
@@ -144,7 +140,7 @@ const FilesTab = React.memo(
 	};
 
 	const handleGetFile = async () => {
-		const file = remoteFiles[remoteSelectedIndex];
+		const file = remoteFiles[remoteState.selectedIndex];
 		if (!file || file.isDir || file.name === '..') return;
 
 		try {
@@ -163,24 +159,26 @@ const FilesTab = React.memo(
 		}
 	};
 
-	// Filter files based on search query
-	const filterFiles = (files: FileInfo[]) => {
-		if (!searchQuery) return files;
-		return files.filter(file =>
+	// Memoized filter functions
+	const getFilteredLocalFiles = useMemo(() => {
+		if (!searchQuery) return localFiles;
+		return localFiles.filter(file =>
 			file.name.toLowerCase().includes(searchQuery.toLowerCase())
 		);
-	};
+	}, [localFiles, searchQuery]);
 
-	const getFilteredLocalFiles = () => filterFiles(localFiles);
-	const getFilteredRemoteFiles = () => filterFiles(remoteFiles);
+	const getFilteredRemoteFiles = useMemo(() => {
+		if (!searchQuery) return remoteFiles;
+		return remoteFiles.filter(file =>
+			file.name.toLowerCase().includes(searchQuery.toLowerCase())
+		);
+	}, [remoteFiles, searchQuery]);
 
 	// Reset selection and scroll when search query changes
 	useEffect(() => {
 		if (searchQuery) {
-			setLocalSelectedIndex(0);
-			setRemoteSelectedIndex(0);
-			setLocalScrollOffset(0);
-			setRemoteScrollOffset(0);
+			setLocalState({ selectedIndex: 0, scrollOffset: 0 });
+			setRemoteState({ selectedIndex: 0, scrollOffset: 0 });
 		}
 	}, [searchQuery]);
 
@@ -209,59 +207,39 @@ const FilesTab = React.memo(
 		}
 
 		// Navigation with auto-scroll
-		const currentFiles = activePane === 'local' ? getFilteredLocalFiles() : getFilteredRemoteFiles();
+		const currentFiles = activePane === 'local' ? getFilteredLocalFiles : getFilteredRemoteFiles;
 		if (input === 'j' || key.downArrow) {
 			if (activePane === 'local') {
-				const currentIndex = localSelectedIndex;
-				const currentScrollOffset = localScrollOffset;
-				const newIndex = Math.min(currentIndex + 1, currentFiles.length - 1);
+				const newIndex = Math.min(localState.selectedIndex + 1, currentFiles.length - 1);
 				// Auto-scroll down if selection moves below visible area
-				const newScrollOffset = newIndex >= currentScrollOffset + maxVisibleFiles
+				const newScrollOffset = newIndex >= localState.scrollOffset + maxVisibleFiles
 					? newIndex - maxVisibleFiles + 1
-					: currentScrollOffset;
-				setLocalSelectedIndex(newIndex);
-				if (newScrollOffset !== currentScrollOffset) {
-					setLocalScrollOffset(newScrollOffset);
-				}
+					: localState.scrollOffset;
+				setLocalState({ selectedIndex: newIndex, scrollOffset: newScrollOffset });
 			} else {
-				const currentIndex = remoteSelectedIndex;
-				const currentScrollOffset = remoteScrollOffset;
-				const newIndex = Math.min(currentIndex + 1, currentFiles.length - 1);
+				const newIndex = Math.min(remoteState.selectedIndex + 1, currentFiles.length - 1);
 				// Auto-scroll down if selection moves below visible area
-				const newScrollOffset = newIndex >= currentScrollOffset + maxVisibleFiles
+				const newScrollOffset = newIndex >= remoteState.scrollOffset + maxVisibleFiles
 					? newIndex - maxVisibleFiles + 1
-					: currentScrollOffset;
-				setRemoteSelectedIndex(newIndex);
-				if (newScrollOffset !== currentScrollOffset) {
-					setRemoteScrollOffset(newScrollOffset);
-				}
+					: remoteState.scrollOffset;
+				setRemoteState({ selectedIndex: newIndex, scrollOffset: newScrollOffset });
 			}
 		}
 		if (input === 'k' || key.upArrow) {
 			if (activePane === 'local') {
-				const currentIndex = localSelectedIndex;
-				const currentScrollOffset = localScrollOffset;
-				const newIndex = Math.max(currentIndex - 1, 0);
+				const newIndex = Math.max(localState.selectedIndex - 1, 0);
 				// Auto-scroll up if selection moves above visible area
-				const newScrollOffset = newIndex < currentScrollOffset
+				const newScrollOffset = newIndex < localState.scrollOffset
 					? newIndex
-					: currentScrollOffset;
-				setLocalSelectedIndex(newIndex);
-				if (newScrollOffset !== currentScrollOffset) {
-					setLocalScrollOffset(newScrollOffset);
-				}
+					: localState.scrollOffset;
+				setLocalState({ selectedIndex: newIndex, scrollOffset: newScrollOffset });
 			} else {
-				const currentIndex = remoteSelectedIndex;
-				const currentScrollOffset = remoteScrollOffset;
-				const newIndex = Math.max(currentIndex - 1, 0);
+				const newIndex = Math.max(remoteState.selectedIndex - 1, 0);
 				// Auto-scroll up if selection moves above visible area
-				const newScrollOffset = newIndex < currentScrollOffset
+				const newScrollOffset = newIndex < remoteState.scrollOffset
 					? newIndex
-					: currentScrollOffset;
-				setRemoteSelectedIndex(newIndex);
-				if (newScrollOffset !== currentScrollOffset) {
-					setRemoteScrollOffset(newScrollOffset);
-				}
+					: remoteState.scrollOffset;
+				setRemoteState({ selectedIndex: newIndex, scrollOffset: newScrollOffset });
 			}
 		}
 
@@ -306,7 +284,7 @@ const FilesTab = React.memo(
 					const actualIndex = scrollOffset + visibleIndex;
 					const isSelected = actualIndex === selectedIndex && isActive;
 					return (
-						<Box key={actualIndex}>
+						<Box key={`${file.name}-${file.modTime}`}>
 							<Text>
 								<Text bold color={isSelected ? 'cyan' : undefined}>{isSelected ? '▶ ' : '  '}</Text>
 								{file.isDir ? '📁' : '📄'}{' '}
@@ -370,25 +348,25 @@ const FilesTab = React.memo(
 			{/* Dual pane file browser */}
 			<Box flexGrow={1}>
 				{/* Local pane */}
-				<Box flexDirection="column" width="50%" borderStyle="single" borderColor={activePane === 'local' ? 'cyan' : 'gray'} paddingX={1}>
+				<Box flexDirection="column" width="50%" borderStyle="single" borderColor="gray" paddingX={1}>
 					<Text bold color={activePane === 'local' ? 'cyan' : 'gray'}>
-						Local: {localPath}
-						{searchQuery && <Text dimColor> (filtered: {getFilteredLocalFiles().length}/{localFiles.length})</Text>}
+						{activePane === 'local' ? '▶ ' : '  '}Local: {localPath}
+						{searchQuery && <Text dimColor> (filtered: {getFilteredLocalFiles.length}/{localFiles.length})</Text>}
 					</Text>
 					<Box flexDirection="column" marginTop={1}>
-						{renderFileList(getFilteredLocalFiles(), localSelectedIndex, localScrollOffset, activePane === 'local')}
+						{renderFileList(getFilteredLocalFiles, localState.selectedIndex, localState.scrollOffset, activePane === 'local')}
 					</Box>
 				</Box>
 
 				{/* Remote pane */}
-				<Box flexDirection="column" width="50%" borderStyle="single" borderColor={activePane === 'remote' ? 'cyan' : 'gray'} paddingX={1}>
+				<Box flexDirection="column" width="50%" borderStyle="single" borderColor="gray" paddingX={1}>
 					<Text bold color={activePane === 'remote' ? 'cyan' : 'gray'}>
-						Remote: {remotePath}
-						{searchQuery && <Text dimColor> (filtered: {getFilteredRemoteFiles().length}/{remoteFiles.length})</Text>}
+						{activePane === 'remote' ? '▶ ' : '  '}Remote: {remotePath}
+						{searchQuery && <Text dimColor> (filtered: {getFilteredRemoteFiles.length}/{remoteFiles.length})</Text>}
 					</Text>
 					{vm.status === 'connected' ? (
 						<Box flexDirection="column" marginTop={1}>
-							{renderFileList(getFilteredRemoteFiles(), remoteSelectedIndex, remoteScrollOffset, activePane === 'remote')}
+							{renderFileList(getFilteredRemoteFiles, remoteState.selectedIndex, remoteState.scrollOffset, activePane === 'remote')}
 						</Box>
 					) : (
 						<Box marginTop={1}>
