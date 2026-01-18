@@ -176,36 +176,6 @@ make test
 make clean
 ```
 
-### Documentation
-
-- [PRD (Product Requirements Document)](docs/PRD.md)
-- [Architecture Documentation](docs/architecture.md)
-- [Development Guide](docs/development.md)
-
-## Roadmap
-
-### Phase 1 (Current) - Foundation
-- [x] Project structure
-- [x] Build system
-- [ ] SSH/SFTP backend
-- [ ] Interactive TUI
-- [ ] File transfers
-
-### Phase 2 - Cloud Providers
-- [ ] AWS EC2 integration
-- [ ] libvirt support
-- [ ] Auto-discovery of VMs
-
-### Phase 3 - Lifecycle Management
-- [ ] Start/stop/suspend VMs
-- [ ] Snapshot support
-- [ ] Resource monitoring
-
-### Phase 4 - Advanced Features
-- [ ] Bastion/jump host support
-- [ ] Team configurations
-- [ ] Optional GUI wrapper
-
 ## Security
 
 - **Credentials**: Stored securely in OS keychain (macOS Keychain, Linux Secret Service, Windows Credential Manager)
