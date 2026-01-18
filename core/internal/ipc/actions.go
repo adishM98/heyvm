@@ -1,0 +1,492 @@
+package ipc
+
+import (
+	"fmt"
+	"log"
+
+	"github.com/adishm/heyvm/internal/auth"
+	"github.com/adishm/heyvm/internal/sftp"
+	"github.com/adishm/heyvm/internal/vm"
+)
+
+// handleListVMs returns all VMs in the registry
+func (h *Handler) handleListVMs(params map[string]interface{}) Response {
+	vms := h.registry.List()
+	return NewSuccessResponse(vms)
+}
+
+// handleAddVM adds a new VM to the registry
+func (h *Handler) handleAddVM(params map[string]interface{}) Response {
+	// Parse VM from params
+	vmData, ok := params["vm"].(map[string]interface{})
+	if !ok {
+		return NewErrorResponseWithMessage("invalid VM data")
+	}
+
+	// Extract fields
+	name, _ := vmData["name"].(string)
+	host, _ := vmData["host"].(string)
+	port, _ := vmData["port"].(float64) // JSON numbers are float64
+	username, _ := vmData["username"].(string)
+
+	if port == 0 {
+		port = 22 // Default SSH port
+	}
+
+	// Extract auth config
+	authData, ok := vmData["auth"].(map[string]interface{})
+	if !ok {
+		return NewErrorResponseWithMessage("invalid auth configuration")
+	}
+
+	authTypeStr, _ := authData["type"].(string)
+	keyPath, _ := authData["keyPath"].(string)
+	rememberPassword, _ := authData["rememberPassword"].(bool)
+
+	var authType vm.AuthType
+	switch authTypeStr {
+	case "key":
+		authType = vm.AuthTypeKey
+	case "password":
+		authType = vm.AuthTypePassword
+	default:
+		return NewErrorResponseWithMessage("invalid auth type")
+	}
+
+	// Create VM
+	newVM := &vm.VM{
+		Name:     name,
+		Host:     host,
+		Port:     int(port),
+		Username: username,
+		Auth: vm.AuthConfig{
+			Type:             authType,
+			KeyPath:          keyPath,
+			RememberPassword: rememberPassword,
+		},
+		Status: vm.VMStatusDisconnected,
+	}
+
+	// Add to registry
+	if err := h.registry.Add(newVM); err != nil {
+		return NewErrorResponse(err)
+	}
+
+	// Save registry
+	if err := h.registry.Save(); err != nil {
+		log.Printf("Warning: failed to save registry: %v", err)
+	}
+
+	return NewSuccessResponseWithMessage("VM added successfully", newVM)
+}
+
+// handleRemoveVM removes a VM from the registry
+func (h *Handler) handleRemoveVM(params map[string]interface{}) Response {
+	vmID, ok := params["vm_id"].(string)
+	if !ok {
+		return NewErrorResponseWithMessage("vm_id parameter required")
+	}
+
+	// Disconnect if connected
+	h.mu.Lock()
+	if sshMgr, exists := h.sshManagers[vmID]; exists {
+		sshMgr.Disconnect()
+		delete(h.sshManagers, vmID)
+	}
+	if sftpMgr, exists := h.sftpManagers[vmID]; exists {
+		sftpMgr.Close()
+		delete(h.sftpManagers, vmID)
+	}
+	if provider, exists := h.authProviders[vmID]; exists {
+		provider.Disconnect()
+		delete(h.authProviders, vmID)
+	}
+	h.mu.Unlock()
+
+	// Remove from registry
+	if err := h.registry.Remove(vmID); err != nil {
+		return NewErrorResponse(err)
+	}
+
+	// Save registry
+	if err := h.registry.Save(); err != nil {
+		log.Printf("Warning: failed to save registry: %v", err)
+	}
+
+	return NewSuccessResponseWithMessage("VM removed successfully", nil)
+}
+
+// handleConnectVM establishes SSH connection to a VM
+func (h *Handler) handleConnectVM(params map[string]interface{}) Response {
+	vmID, ok := params["vm_id"].(string)
+	if !ok {
+		return NewErrorResponseWithMessage("vm_id parameter required")
+	}
+
+	// Get SSH manager
+	sshMgr, err := h.getSSHManager(vmID)
+	if err != nil {
+		return NewErrorResponse(err)
+	}
+
+	// Check if already connected (idempotent)
+	if sshMgr.IsConnected() {
+		// Already connected - just ensure status is correct
+		if err := h.registry.UpdateStatus(vmID, vm.VMStatusConnected); err != nil {
+			log.Printf("Warning: failed to update VM status: %v", err)
+		}
+		if err := h.registry.Save(); err != nil {
+			log.Printf("Warning: failed to save registry: %v", err)
+		}
+		return NewSuccessResponseWithMessage("Already connected", nil)
+	}
+
+	// Set status to connecting
+	if err := h.registry.UpdateStatus(vmID, vm.VMStatusConnecting); err != nil {
+		log.Printf("Warning: failed to update VM status: %v", err)
+	}
+	if err := h.registry.Save(); err != nil {
+		log.Printf("Warning: failed to save registry: %v", err)
+	}
+
+	// Connect (this is now idempotent)
+	if err := sshMgr.Connect(); err != nil {
+		h.registry.UpdateStatus(vmID, vm.VMStatusError)
+		h.registry.Save()
+		return NewErrorResponse(err)
+	}
+
+	// Update status to connected
+	if err := h.registry.UpdateStatus(vmID, vm.VMStatusConnected); err != nil {
+		log.Printf("Warning: failed to update VM status: %v", err)
+	}
+
+	// Save registry
+	if err := h.registry.Save(); err != nil {
+		log.Printf("Warning: failed to save registry: %v", err)
+	}
+
+	return NewSuccessResponseWithMessage("Connected successfully", nil)
+}
+
+// handleDisconnectVM closes SSH connection to a VM
+func (h *Handler) handleDisconnectVM(params map[string]interface{}) Response {
+	vmID, ok := params["vm_id"].(string)
+	if !ok {
+		return NewErrorResponseWithMessage("vm_id parameter required")
+	}
+
+	h.mu.Lock()
+
+	// Close SFTP if exists
+	if sftpMgr, exists := h.sftpManagers[vmID]; exists {
+		sftpMgr.Close()
+		delete(h.sftpManagers, vmID)
+	}
+
+	// Disconnect SSH if exists
+	if sshMgr, exists := h.sshManagers[vmID]; exists {
+		if err := sshMgr.Disconnect(); err != nil {
+			h.mu.Unlock()
+			return NewErrorResponse(err)
+		}
+		delete(h.sshManagers, vmID)
+	}
+
+	h.mu.Unlock()
+
+	// Update status
+	if err := h.registry.UpdateStatus(vmID, vm.VMStatusDisconnected); err != nil {
+		log.Printf("Warning: failed to update VM status: %v", err)
+	}
+
+	// Save registry
+	if err := h.registry.Save(); err != nil {
+		log.Printf("Warning: failed to save registry: %v", err)
+	}
+
+	return NewSuccessResponseWithMessage("Disconnected successfully", nil)
+}
+
+// handleExecuteCommand executes a command on a VM
+func (h *Handler) handleExecuteCommand(params map[string]interface{}) Response {
+	vmID, ok := params["vm_id"].(string)
+	if !ok {
+		return NewErrorResponseWithMessage("vm_id parameter required")
+	}
+
+	command, ok := params["command"].(string)
+	if !ok {
+		return NewErrorResponseWithMessage("command parameter required")
+	}
+
+	// Get SSH manager
+	sshMgr, err := h.getSSHManager(vmID)
+	if err != nil {
+		return NewErrorResponse(err)
+	}
+
+	// Ensure connected
+	if !sshMgr.IsConnected() {
+		if err := sshMgr.Connect(); err != nil {
+			return NewErrorResponse(err)
+		}
+	}
+
+	// Execute command
+	output, err := sshMgr.ExecuteCommand(command)
+	if err != nil {
+		return NewErrorResponse(err)
+	}
+
+	return NewSuccessResponse(map[string]interface{}{
+		"output": output,
+	})
+}
+
+// handleListFiles lists files in a directory on a VM
+func (h *Handler) handleListFiles(params map[string]interface{}) Response {
+	vmID, ok := params["vm_id"].(string)
+	if !ok {
+		return NewErrorResponseWithMessage("vm_id parameter required")
+	}
+
+	path, ok := params["path"].(string)
+	if !ok {
+		path = "/" // Default to root
+	}
+
+	// Get SFTP manager
+	sftpMgr, err := h.getSFTPManager(vmID)
+	if err != nil {
+		return NewErrorResponse(err)
+	}
+
+	// List files
+	files, err := sftpMgr.List(path)
+	if err != nil {
+		return NewErrorResponse(err)
+	}
+
+	return NewSuccessResponse(files)
+}
+
+// handleUploadFile uploads a file to a VM
+func (h *Handler) handleUploadFile(params map[string]interface{}) Response {
+	vmID, ok := params["vm_id"].(string)
+	if !ok {
+		return NewErrorResponseWithMessage("vm_id parameter required")
+	}
+
+	localPath, ok := params["local_path"].(string)
+	if !ok {
+		return NewErrorResponseWithMessage("local_path parameter required")
+	}
+
+	remotePath, ok := params["remote_path"].(string)
+	if !ok {
+		return NewErrorResponseWithMessage("remote_path parameter required")
+	}
+
+	// Get SFTP manager
+	sftpMgr, err := h.getSFTPManager(vmID)
+	if err != nil {
+		return NewErrorResponse(err)
+	}
+
+	// Upload file
+	opts := &sftp.TransferOptions{
+		Overwrite:           true,
+		PreservePermissions: true,
+	}
+
+	if err := sftpMgr.Upload(localPath, remotePath, opts); err != nil {
+		return NewErrorResponse(err)
+	}
+
+	return NewSuccessResponseWithMessage("File uploaded successfully", nil)
+}
+
+// handleDownloadFile downloads a file from a VM
+func (h *Handler) handleDownloadFile(params map[string]interface{}) Response {
+	vmID, ok := params["vm_id"].(string)
+	if !ok {
+		return NewErrorResponseWithMessage("vm_id parameter required")
+	}
+
+	remotePath, ok := params["remote_path"].(string)
+	if !ok {
+		return NewErrorResponseWithMessage("remote_path parameter required")
+	}
+
+	localPath, ok := params["local_path"].(string)
+	if !ok {
+		return NewErrorResponseWithMessage("local_path parameter required")
+	}
+
+	// Get SFTP manager
+	sftpMgr, err := h.getSFTPManager(vmID)
+	if err != nil {
+		return NewErrorResponse(err)
+	}
+
+	// Download file
+	opts := &sftp.TransferOptions{
+		Overwrite:           true,
+		PreservePermissions: true,
+	}
+
+	if err := sftpMgr.Download(remotePath, localPath, opts); err != nil {
+		return NewErrorResponse(err)
+	}
+
+	return NewSuccessResponseWithMessage("File downloaded successfully", nil)
+}
+
+// handleDeleteFile deletes a file on a VM
+func (h *Handler) handleDeleteFile(params map[string]interface{}) Response {
+	vmID, ok := params["vm_id"].(string)
+	if !ok {
+		return NewErrorResponseWithMessage("vm_id parameter required")
+	}
+
+	path, ok := params["path"].(string)
+	if !ok {
+		return NewErrorResponseWithMessage("path parameter required")
+	}
+
+	// Get SFTP manager
+	sftpMgr, err := h.getSFTPManager(vmID)
+	if err != nil {
+		return NewErrorResponse(err)
+	}
+
+	// Delete file
+	if err := sftpMgr.Delete(path); err != nil {
+		return NewErrorResponse(err)
+	}
+
+	return NewSuccessResponseWithMessage("File deleted successfully", nil)
+}
+
+// handleRenameFile renames/moves a file on a VM
+func (h *Handler) handleRenameFile(params map[string]interface{}) Response {
+	vmID, ok := params["vm_id"].(string)
+	if !ok {
+		return NewErrorResponseWithMessage("vm_id parameter required")
+	}
+
+	oldPath, ok := params["old_path"].(string)
+	if !ok {
+		return NewErrorResponseWithMessage("old_path parameter required")
+	}
+
+	newPath, ok := params["new_path"].(string)
+	if !ok {
+		return NewErrorResponseWithMessage("new_path parameter required")
+	}
+
+	// Get SFTP manager
+	sftpMgr, err := h.getSFTPManager(vmID)
+	if err != nil {
+		return NewErrorResponse(err)
+	}
+
+	// Rename file
+	if err := sftpMgr.Rename(oldPath, newPath); err != nil {
+		return NewErrorResponse(err)
+	}
+
+	return NewSuccessResponseWithMessage("File renamed successfully", nil)
+}
+
+// handleStorePassword stores a password in the keychain
+func (h *Handler) handleStorePassword(params map[string]interface{}) Response {
+	vmID, ok := params["vm_id"].(string)
+	if !ok {
+		return NewErrorResponseWithMessage("vm_id parameter required")
+	}
+
+	password, ok := params["password"].(string)
+	if !ok {
+		return NewErrorResponseWithMessage("password parameter required")
+	}
+
+	// Create password auth provider
+	passwordAuth, err := auth.NewPasswordAuth()
+	if err != nil {
+		return NewErrorResponse(err)
+	}
+
+	// Store password
+	if err := passwordAuth.StorePassword(vmID, password); err != nil {
+		return NewErrorResponse(err)
+	}
+
+	return NewSuccessResponseWithMessage("Password stored successfully", nil)
+}
+
+// handleTestConnection tests SSH connection to a VM without saving it
+func (h *Handler) handleTestConnection(params map[string]interface{}) Response {
+	// Parse VM from params (similar to handleAddVM)
+	vmData, ok := params["vm"].(map[string]interface{})
+	if !ok {
+		return NewErrorResponseWithMessage("invalid VM data")
+	}
+
+	name, _ := vmData["name"].(string)
+	host, _ := vmData["host"].(string)
+	port, _ := vmData["port"].(float64)
+	username, _ := vmData["username"].(string)
+
+	if port == 0 {
+		port = 22
+	}
+
+	authData, ok := vmData["auth"].(map[string]interface{})
+	if !ok {
+		return NewErrorResponseWithMessage("invalid auth configuration")
+	}
+
+	authTypeStr, _ := authData["type"].(string)
+	keyPath, _ := authData["keyPath"].(string)
+
+	var authType vm.AuthType
+	switch authTypeStr {
+	case "key":
+		authType = vm.AuthTypeKey
+	case "password":
+		authType = vm.AuthTypePassword
+	default:
+		return NewErrorResponseWithMessage("invalid auth type")
+	}
+
+	// Create temporary VM
+	testVM := &vm.VM{
+		ID:       "test",
+		Name:     name,
+		Host:     host,
+		Port:     int(port),
+		Username: username,
+		Auth: vm.AuthConfig{
+			Type:    authType,
+			KeyPath: keyPath,
+		},
+	}
+
+	// Create auth provider
+	provider, err := auth.NewProvider(testVM)
+	if err != nil {
+		return NewErrorResponse(err)
+	}
+	defer provider.Disconnect()
+
+	// Test connection
+	client, err := provider.Connect(testVM)
+	if err != nil {
+		return NewErrorResponse(fmt.Errorf("connection test failed: %w", err))
+	}
+	defer client.Close()
+
+	return NewSuccessResponseWithMessage("Connection test successful", nil)
+}

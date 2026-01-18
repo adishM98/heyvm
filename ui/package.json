@@ -1,0 +1,30 @@
+{
+  "name": "heyvm-ui",
+  "version": "0.1.0",
+  "description": "Interactive TUI for heyvm - SSH VM manager",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.tsx",
+    "dev:with-core": "npm run build && node scripts/start-with-core.js",
+    "build": "tsc && esbuild src/index.tsx --bundle --platform=node --outfile=dist/index.js --external:react --external:ink --format=esm",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "ink": "^5.0.1",
+    "ink-select-input": "^6.0.0",
+    "ink-text-input": "^6.0.0",
+    "react": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/react": "^18.3.18",
+    "esbuild": "^0.24.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
