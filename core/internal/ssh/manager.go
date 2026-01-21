@@ -174,6 +174,9 @@ func (m *Manager) StartPTY(rows, cols int) (*Session, error) {
 		cols:    cols,
 	}
 
+	// Start background output reader
+	session.startOutputReader()
+
 	// Store session
 	m.mu.Lock()
 	m.sessions[session.ID()] = session

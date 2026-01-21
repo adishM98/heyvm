@@ -2,6 +2,7 @@ package ipc
 
 import (
 	"fmt"
+	"io"
 	"log"
 
 	"github.com/adishm/heyvm/internal/auth"
@@ -489,4 +490,154 @@ func (h *Handler) handleTestConnection(params map[string]interface{}) Response {
 	defer client.Close()
 
 	return NewSuccessResponseWithMessage("Connection test successful", nil)
+}
+
+// handleStartPTY starts an interactive PTY session
+func (h *Handler) handleStartPTY(params map[string]interface{}) Response {
+	vmID, ok := params["vm_id"].(string)
+	if !ok {
+		return NewErrorResponseWithMessage("vm_id parameter required")
+	}
+
+	rows, ok := params["rows"].(float64)
+	if !ok {
+		rows = 24 // Default rows
+	}
+
+	cols, ok := params["cols"].(float64)
+	if !ok {
+		cols = 80 // Default cols
+	}
+
+	// Get SSH manager
+	sshMgr, err := h.getSSHManager(vmID)
+	if err != nil {
+		return NewErrorResponse(err)
+	}
+
+	// Ensure connected
+	if !sshMgr.IsConnected() {
+		if err := sshMgr.Connect(); err != nil {
+			return NewErrorResponse(err)
+		}
+	}
+
+	// Start PTY session
+	session, err := sshMgr.StartPTY(int(rows), int(cols))
+	if err != nil {
+		return NewErrorResponse(err)
+	}
+
+	return NewSuccessResponse(map[string]interface{}{
+		"session_id": session.ID(),
+	})
+}
+
+// handleWriteToPTY writes data to a PTY session
+func (h *Handler) handleWriteToPTY(params map[string]interface{}) Response {
+	vmID, ok := params["vm_id"].(string)
+	if !ok {
+		return NewErrorResponseWithMessage("vm_id parameter required")
+	}
+
+	sessionID, ok := params["session_id"].(string)
+	if !ok {
+		return NewErrorResponseWithMessage("session_id parameter required")
+	}
+
+	data, ok := params["data"].(string)
+	if !ok {
+		return NewErrorResponseWithMessage("data parameter required")
+	}
+
+	// Get SSH manager
+	sshMgr, err := h.getSSHManager(vmID)
+	if err != nil {
+		return NewErrorResponse(err)
+	}
+
+	// Get session
+	session, err := sshMgr.GetSession(sessionID)
+	if err != nil {
+		return NewErrorResponse(err)
+	}
+
+	// Write data
+	n, err := session.Write([]byte(data))
+	if err != nil {
+		return NewErrorResponse(err)
+	}
+
+	return NewSuccessResponse(map[string]interface{}{
+		"bytes_written": n,
+	})
+}
+
+// handleReadFromPTY reads data from a PTY session
+func (h *Handler) handleReadFromPTY(params map[string]interface{}) Response {
+	vmID, ok := params["vm_id"].(string)
+	if !ok {
+		return NewErrorResponseWithMessage("vm_id parameter required")
+	}
+
+	sessionID, ok := params["session_id"].(string)
+	if !ok {
+		return NewErrorResponseWithMessage("session_id parameter required")
+	}
+
+	maxBytes, ok := params["max_bytes"].(float64)
+	if !ok {
+		maxBytes = 4096 // Default buffer size
+	}
+
+	// Get SSH manager
+	sshMgr, err := h.getSSHManager(vmID)
+	if err != nil {
+		return NewErrorResponse(err)
+	}
+
+	// Get session
+	session, err := sshMgr.GetSession(sessionID)
+	if err != nil {
+		return NewErrorResponse(err)
+	}
+
+	// Read data
+	buf := make([]byte, int(maxBytes))
+	n, err := session.Read(buf)
+	
+	if err != nil && err != io.EOF {
+		return NewErrorResponse(err)
+	}
+
+	return NewSuccessResponse(map[string]interface{}{
+		"data":       string(buf[:n]),
+		"bytes_read": n,
+	})
+}
+
+// handleClosePTY closes a PTY session
+func (h *Handler) handleClosePTY(params map[string]interface{}) Response {
+	vmID, ok := params["vm_id"].(string)
+	if !ok {
+		return NewErrorResponseWithMessage("vm_id parameter required")
+	}
+
+	sessionID, ok := params["session_id"].(string)
+	if !ok {
+		return NewErrorResponseWithMessage("session_id parameter required")
+	}
+
+	// Get SSH manager
+	sshMgr, err := h.getSSHManager(vmID)
+	if err != nil {
+		return NewErrorResponse(err)
+	}
+
+	// Close session
+	if err := sshMgr.CloseSession(sessionID); err != nil {
+		return NewErrorResponse(err)
+	}
+
+	return NewSuccessResponseWithMessage("PTY session closed", nil)
 }

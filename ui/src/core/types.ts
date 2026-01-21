@@ -29,11 +29,13 @@ export interface FileInfo {
 }
 
 export interface IPCRequest {
+	request_id?: number;
 	action: string;
 	params?: Record<string, unknown>;
 }
 
 export interface IPCResponse<T = unknown> {
+	request_id?: number;
 	status: 'success' | 'error';
 	message?: string;
 	data?: T;

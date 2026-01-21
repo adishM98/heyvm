@@ -53,12 +53,14 @@ export class IPCClient {
 	}
 
 	private handleResponse(response: IPCResponse) {
-		// For now, resolve the most recent request
-		// In a more robust implementation, we'd use request IDs
-		const pending = Array.from(this.pendingRequests.values())[0];
-		if (pending) {
-			this.pendingRequests.clear();
+		// Match response to request by ID
+		const requestId = response.request_id;
+		if (requestId !== undefined && this.pendingRequests.has(requestId)) {
+			const pending = this.pendingRequests.get(requestId)!;
+			this.pendingRequests.delete(requestId);
 			pending.resolve(response);
+		} else {
+			console.warn('[IPC] Received response with no matching request:', response);
 		}
 	}
 
@@ -80,8 +82,14 @@ export class IPCClient {
 			const id = this.requestId++;
 			this.pendingRequests.set(id, { resolve, reject });
 
+			// Add request ID to the request
+			const requestWithId = {
+				...request,
+				request_id: id
+			};
+
 			// Write request to core stdin
-			const requestStr = JSON.stringify(request) + '\n';
+			const requestStr = JSON.stringify(requestWithId) + '\n';
 			global.heyvmCore!.stdin.write(requestStr, (err) => {
 				if (err) {
 					this.pendingRequests.delete(id);
@@ -289,6 +297,72 @@ export class IPCClient {
 
 		if (response.status === 'error') {
 			throw new Error(response.message || 'Connection test failed');
+		}
+	}
+
+	/**
+	 * Start an interactive PTY session
+	 */
+	async startPTY(vmId: string, rows: number = 24, cols: number = 80): Promise<string> {
+		const response = await this.sendRequest<{ session_id: string }>({
+			action: 'start_pty',
+			params: { vm_id: vmId, rows, cols }
+		});
+
+		if (response.status === 'error') {
+			throw new Error(response.message || 'Failed to start PTY session');
+		}
+
+		if (!response.data?.session_id) {
+			throw new Error('No session ID returned');
+		}
+
+		return response.data.session_id;
+	}
+
+	/**
+	 * Write data to a PTY session
+	 */
+	async writeToPTY(vmId: string, sessionId: string, data: string): Promise<number> {
+		const response = await this.sendRequest<{ bytes_written: number }>({
+			action: 'write_to_pty',
+			params: { vm_id: vmId, session_id: sessionId, data }
+		});
+
+		if (response.status === 'error') {
+			throw new Error(response.message || 'Failed to write to PTY');
+		}
+
+		return response.data?.bytes_written || 0;
+	}
+
+	/**
+	 * Read data from a PTY session
+	 */
+	async readFromPTY(vmId: string, sessionId: string, maxBytes: number = 4096): Promise<string> {
+		const response = await this.sendRequest<{ data: string; bytes_read: number }>({
+			action: 'read_from_pty',
+			params: { vm_id: vmId, session_id: sessionId, max_bytes: maxBytes }
+		});
+
+		if (response.status === 'error') {
+			throw new Error(response.message || 'Failed to read from PTY');
+		}
+
+		return response.data?.data || '';
+	}
+
+	/**
+	 * Close a PTY session
+	 */
+	async closePTY(vmId: string, sessionId: string): Promise<void> {
+		const response = await this.sendRequest({
+			action: 'close_pty',
+			params: { vm_id: vmId, session_id: sessionId }
+		});
+
+		if (response.status === 'error') {
+			throw new Error(response.message || 'Failed to close PTY session');
 		}
 	}
 }

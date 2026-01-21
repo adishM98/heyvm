@@ -76,36 +76,50 @@ func (h *Handler) Start() error {
 
 // HandleRequest routes a request to the appropriate action handler
 func (h *Handler) HandleRequest(req Request) Response {
+	var resp Response
+	
 	switch req.Action {
 	case ActionListVMs:
-		return h.handleListVMs(req.Params)
+		resp = h.handleListVMs(req.Params)
 	case ActionAddVM:
-		return h.handleAddVM(req.Params)
+		resp = h.handleAddVM(req.Params)
 	case ActionRemoveVM:
-		return h.handleRemoveVM(req.Params)
+		resp = h.handleRemoveVM(req.Params)
 	case ActionConnectVM:
-		return h.handleConnectVM(req.Params)
+		resp = h.handleConnectVM(req.Params)
 	case ActionDisconnectVM:
-		return h.handleDisconnectVM(req.Params)
+		resp = h.handleDisconnectVM(req.Params)
 	case ActionExecuteCommand:
-		return h.handleExecuteCommand(req.Params)
+		resp = h.handleExecuteCommand(req.Params)
 	case ActionListFiles:
-		return h.handleListFiles(req.Params)
+		resp = h.handleListFiles(req.Params)
 	case ActionUploadFile:
-		return h.handleUploadFile(req.Params)
+		resp = h.handleUploadFile(req.Params)
 	case ActionDownloadFile:
-		return h.handleDownloadFile(req.Params)
+		resp = h.handleDownloadFile(req.Params)
 	case ActionDeleteFile:
-		return h.handleDeleteFile(req.Params)
+		resp = h.handleDeleteFile(req.Params)
 	case ActionRenameFile:
-		return h.handleRenameFile(req.Params)
+		resp = h.handleRenameFile(req.Params)
 	case ActionStorePassword:
-		return h.handleStorePassword(req.Params)
+		resp = h.handleStorePassword(req.Params)
 	case ActionTestConnection:
-		return h.handleTestConnection(req.Params)
+		resp = h.handleTestConnection(req.Params)
+	case ActionStartPTY:
+		resp = h.handleStartPTY(req.Params)
+	case ActionWriteToPTY:
+		resp = h.handleWriteToPTY(req.Params)
+	case ActionReadFromPTY:
+		resp = h.handleReadFromPTY(req.Params)
+	case ActionClosePTY:
+		resp = h.handleClosePTY(req.Params)
 	default:
-		return NewErrorResponseWithMessage(fmt.Sprintf("unknown action: %s", req.Action))
+		resp = NewErrorResponseWithMessage(fmt.Sprintf("unknown action: %s", req.Action))
 	}
+	
+	// Add request ID to response for proper matching
+	resp.RequestID = req.RequestID
+	return resp
 }
 
 // cleanup closes all active connections
