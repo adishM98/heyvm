@@ -99,28 +99,32 @@ const FilesTab = React.memo(
 
 	const handleEnterDirectory = () => {
 		if (activePane === 'local') {
-			const file = localFiles[localState.selectedIndex];
+			const file = getFilteredLocalFiles[localState.selectedIndex];
 			if (file && file.isDir) {
 				if (file.name === '..') {
 					setLocalPath(path.dirname(localPath));
 				} else {
 					setLocalPath(path.join(localPath, file.name));
 				}
+				// Clear search when entering a directory
+				setSearchQuery('');
 			}
 		} else {
-			const file = remoteFiles[remoteState.selectedIndex];
+			const file = getFilteredRemoteFiles[remoteState.selectedIndex];
 			if (file && file.isDir) {
 				if (file.name === '..') {
 					setRemotePath(path.dirname(remotePath));
 				} else {
 					setRemotePath(path.join(remotePath, file.name));
 				}
+				// Clear search when entering a directory
+				setSearchQuery('');
 			}
 		}
 	};
 
 	const handlePushFile = async () => {
-		const file = localFiles[localState.selectedIndex];
+		const file = getFilteredLocalFiles[localState.selectedIndex];
 		if (!file || file.isDir || file.name === '..') return;
 
 		try {
@@ -140,7 +144,7 @@ const FilesTab = React.memo(
 	};
 
 	const handleGetFile = async () => {
-		const file = remoteFiles[remoteState.selectedIndex];
+		const file = getFilteredRemoteFiles[remoteState.selectedIndex];
 		if (!file || file.isDir || file.name === '..') return;
 
 		try {
@@ -161,26 +165,29 @@ const FilesTab = React.memo(
 
 	// Memoized filter functions
 	const getFilteredLocalFiles = useMemo(() => {
-		if (!searchQuery) return localFiles;
+		if (!searchQuery || activePane !== 'local') return localFiles;
 		return localFiles.filter(file =>
 			file.name.toLowerCase().includes(searchQuery.toLowerCase())
 		);
-	}, [localFiles, searchQuery]);
+	}, [localFiles, searchQuery, activePane]);
 
 	const getFilteredRemoteFiles = useMemo(() => {
-		if (!searchQuery) return remoteFiles;
+		if (!searchQuery || activePane !== 'remote') return remoteFiles;
 		return remoteFiles.filter(file =>
 			file.name.toLowerCase().includes(searchQuery.toLowerCase())
 		);
-	}, [remoteFiles, searchQuery]);
+	}, [remoteFiles, searchQuery, activePane]);
 
-	// Reset selection and scroll when search query changes
+	// Reset selection to top when filter becomes active
 	useEffect(() => {
 		if (searchQuery) {
-			setLocalState({ selectedIndex: 0, scrollOffset: 0 });
-			setRemoteState({ selectedIndex: 0, scrollOffset: 0 });
+			if (activePane === 'local') {
+				setLocalState({ selectedIndex: 0, scrollOffset: 0 });
+			} else {
+				setRemoteState({ selectedIndex: 0, scrollOffset: 0 });
+			}
 		}
-	}, [searchQuery]);
+	}, [searchQuery, activePane]);
 
 	// Key handlers
 	useInput((input, key) => {
@@ -188,8 +195,8 @@ const FilesTab = React.memo(
 
 		// Don't handle keys when in search mode (TextInput handles them)
 		if (searchMode) {
-			// Use Enter to exit search mode (Esc conflicts with global VM deselect)
-			if (key.return) {
+			// Use Enter or Esc to exit search input mode (but keep the filter)
+			if (key.return || key.escape) {
 				setSearchMode(false);
 			}
 			return;
@@ -202,6 +209,11 @@ const FilesTab = React.memo(
 		// Toggle search mode with '/'
 		if (input === '/') {
 			setSearchMode(true);
+			return;
+		}
+
+		// Clear filter with 'c'
+		if (input === 'c' && searchQuery) {
 			setSearchQuery('');
 			return;
 		}
@@ -341,7 +353,7 @@ const FilesTab = React.memo(
 						placeholder="Type to filter files..."
 						onSubmit={() => setSearchMode(false)}
 					/>
-					<Text dimColor> (Enter to exit)</Text>
+					<Text dimColor> (Enter/Esc to exit)</Text>
 				</Box>
 			)}
 
@@ -351,7 +363,7 @@ const FilesTab = React.memo(
 				<Box flexDirection="column" width="50%" borderStyle="single" borderColor="gray" paddingX={1}>
 					<Text bold color={activePane === 'local' ? 'cyan' : 'gray'}>
 						{activePane === 'local' ? '▶ ' : '  '}Local: {localPath}
-						{searchQuery && <Text dimColor> (filtered: {getFilteredLocalFiles.length}/{localFiles.length})</Text>}
+						{searchQuery && activePane === 'local' && <Text dimColor> (filtered: {getFilteredLocalFiles.length}/{localFiles.length})</Text>}
 					</Text>
 					<Box flexDirection="column" marginTop={1}>
 						{renderFileList(getFilteredLocalFiles, localState.selectedIndex, localState.scrollOffset, activePane === 'local')}
@@ -362,7 +374,7 @@ const FilesTab = React.memo(
 				<Box flexDirection="column" width="50%" borderStyle="single" borderColor="gray" paddingX={1}>
 					<Text bold color={activePane === 'remote' ? 'cyan' : 'gray'}>
 						{activePane === 'remote' ? '▶ ' : '  '}Remote: {remotePath}
-						{searchQuery && <Text dimColor> (filtered: {getFilteredRemoteFiles.length}/{remoteFiles.length})</Text>}
+						{searchQuery && activePane === 'remote' && <Text dimColor> (filtered: {getFilteredRemoteFiles.length}/{remoteFiles.length})</Text>}
 					</Text>
 					{vm.status === 'connected' ? (
 						<Box flexDirection="column" marginTop={1}>
@@ -383,6 +395,7 @@ const FilesTab = React.memo(
 					<Text bold>j/k/↑/↓</Text> navigate • {' '}
 					<Text bold>Enter</Text> open dir • {' '}
 					<Text bold>/</Text> search • {' '}
+					{searchQuery && <><Text bold>c</Text> clear filter • {' '}</> }
 					<Text bold>p</Text> push (local→remote) • {' '}
 					<Text bold>g</Text> get (remote→local)
 				</Text>
