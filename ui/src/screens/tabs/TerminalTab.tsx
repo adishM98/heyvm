@@ -16,6 +16,7 @@ const TerminalTab = React.memo(
 	function TerminalTab({ vm, isActive }: TerminalTabProps) {
 	const [sessionId, setSessionId] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
+	const [scrollOffset, setScrollOffset] = useState(0); // 0 = bottom (live), positive = scrolled up
 	const ptyStartedRef = useRef<boolean>(false);
 	const emulatorRef = useRef<TerminalEmulator | null>(null);
 	
@@ -195,6 +196,42 @@ const TerminalTab = React.memo(
 	useInput((input, key) => {
 		if (!isActive || !sessionId || vm.status !== 'connected') return;
 		
+		// Ctrl+O: Exit terminal to Overview tab (let parent handle it)
+		if (key.ctrl && input === 'o') {
+			// Don't capture - let it bubble to parent
+			return;
+		}
+		
+		// Scroll handling (intercept before sending to PTY)
+		if (key.pageUp) {
+			setScrollOffset(prev => Math.min(prev + TERMINAL_ROWS, 1000)); // Scroll up
+			return;
+		}
+		if (key.pageDown) {
+			if (scrollOffset > 0) {
+				setScrollOffset(prev => Math.max(prev - TERMINAL_ROWS, 0)); // Scroll down
+				return;
+			}
+			// If already at bottom, send to PTY
+		}
+		
+		// Shift+Up/Down for line-by-line scrolling
+		if (key.shift && key.upArrow) {
+			setScrollOffset(prev => Math.min(prev + 1, 1000));
+			return;
+		}
+		if (key.shift && key.downArrow) {
+			if (scrollOffset > 0) {
+				setScrollOffset(prev => Math.max(prev - 1, 0));
+				return;
+			}
+		}
+		
+		// Any other key: auto-scroll to bottom (resume live mode)
+		if (scrollOffset > 0 && (input || key.return || key.backspace)) {
+			setScrollOffset(0);
+		}
+		
 		// Escape key (critical for vim)
 		if (key.escape) return ipcClient.writeToPTY(vm.id, sessionId, '\x1b');
 		
@@ -212,15 +249,11 @@ const TerminalTab = React.memo(
 		if (key.backspace || key.delete) return ipcClient.writeToPTY(vm.id, sessionId, '\x7f');
 		if (key.tab) return ipcClient.writeToPTY(vm.id, sessionId, '\t');
 		
-		// Arrow keys
-		if (key.upArrow) return ipcClient.writeToPTY(vm.id, sessionId, '\x1b[A');
-		if (key.downArrow) return ipcClient.writeToPTY(vm.id, sessionId, '\x1b[B');
+		// Arrow keys (without shift - send to PTY)
+		if (key.upArrow && !key.shift) return ipcClient.writeToPTY(vm.id, sessionId, '\x1b[A');
+		if (key.downArrow && !key.shift) return ipcClient.writeToPTY(vm.id, sessionId, '\x1b[B');
 		if (key.leftArrow) return ipcClient.writeToPTY(vm.id, sessionId, '\x1b[D');
 		if (key.rightArrow) return ipcClient.writeToPTY(vm.id, sessionId, '\x1b[C');
-		
-		// Page Up/Down
-		if (key.pageDown) return ipcClient.writeToPTY(vm.id, sessionId, '\x1b[6~');
-		if (key.pageUp) return ipcClient.writeToPTY(vm.id, sessionId, '\x1b[5~');
 		
 		// Regular characters (including numbers)
 		if (input && !key.ctrl && !key.meta) {
@@ -241,32 +274,45 @@ const TerminalTab = React.memo(
 				</Box>
 			)}
 			{vm.status === 'connected' && emulatorRef.current && (
-				<Box flexDirection="column" height={TERMINAL_ROWS} overflow="hidden">
-					{emulatorRef.current.getViewport(TERMINAL_ROWS).map((line, i) => {
-						const cursor = emulatorRef.current?.getCursorPosition();
-						const buffer = emulatorRef.current?.getTerminal().buffer.active;
-						const viewportY = buffer?.viewportY || 0;
-						const cursorRow = cursor ? cursor.y : 0;
-						const cursorCol = cursor ? cursor.x : 0;
-						const isOnThisLine = cursorRow - viewportY === i;
-						
-						if (isOnThisLine && cursorVisible && sessionId) {
-							// Render cursor
-							const beforeCursor = line.substring(0, cursorCol);
-							const atCursor = line[cursorCol] || ' ';
-							const afterCursor = line.substring(cursorCol + 1);
+				<Box flexDirection="column">
+					{/* Scroll indicator */}
+					{scrollOffset > 0 && (
+						<Box>
+							<Text color="yellow" dimColor>
+								↑ Scrolled {scrollOffset} lines | PgUp/PgDn or Shift+↑↓ to scroll | Type to resume
+							</Text>
+						</Box>
+					)}
+					
+					{/* Terminal viewport */}
+					<Box flexDirection="column" height={TERMINAL_ROWS} overflow="hidden">
+						{emulatorRef.current.getViewport(TERMINAL_ROWS, scrollOffset).map((line, i) => {
+							const cursor = emulatorRef.current?.getCursorPosition();
+							const buffer = emulatorRef.current?.getTerminal().buffer.active;
+							const viewportY = buffer?.viewportY || 0;
+							const cursorRow = cursor ? cursor.y : 0;
+							const cursorCol = cursor ? cursor.x : 0;
+							// Only show cursor when at bottom (live mode)
+							const isOnThisLine = scrollOffset === 0 && (cursorRow - viewportY === i);
 							
-							return (
-								<Text key={i}>
-									{beforeCursor}
-									<Text inverse>{atCursor}</Text>
-									{afterCursor}
-								</Text>
-							);
-						}
-						
-						return <Text key={i}>{line || ' '}</Text>;
-					})}
+							if (isOnThisLine && cursorVisible && sessionId) {
+								// Render cursor
+								const beforeCursor = line.substring(0, cursorCol);
+								const atCursor = line[cursorCol] || ' ';
+								const afterCursor = line.substring(cursorCol + 1);
+								
+								return (
+									<Text key={i}>
+										{beforeCursor}
+										<Text inverse>{atCursor}</Text>
+										{afterCursor}
+									</Text>
+								);
+							}
+							
+							return <Text key={i}>{line || ' '}</Text>;
+						})}
+					</Box>
 				</Box>
 			)}
 		</Box>

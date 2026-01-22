@@ -39,7 +39,7 @@ export default React.memo(function VMDetailScreen({ vm, activeTab, onTabChange, 
 			case 'terminal':
 				return (
 					<Text dimColor>
-						<Text bold>Enter</Text> run • <Text bold>Ctrl+C</Text> interrupt • <Text bold>1/2/3</Text> tabs • <Text bold>Esc</Text> back
+						<Text bold>PgUp/PgDn</Text> or <Text bold>Shift+↑↓</Text> scroll • <Text bold>Ctrl+O</Text> overview • <Text bold>Esc</Text> back
 					</Text>
 				);
 			case 'files':

@@ -69,6 +69,12 @@ export default function App() {
 		// Modal takes precedence
 		if (showAddVMModal) return;
 
+		// Ctrl+O from terminal: switch to overview tab
+		if (key.ctrl && input === 'o' && activePaneSide === 'right' && selectedVM && activeTab === 'terminal') {
+			setActiveTab('overview');
+			return;
+		}
+
 		// Terminal has complete input priority - don't intercept ANYTHING when terminal is active
 		if (activePaneSide === 'right' && selectedVM && activeTab === 'terminal') {
 			return; // Let terminal handle all input

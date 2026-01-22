@@ -52,14 +52,16 @@ export class TerminalEmulator {
 	/**
 	 * Get the visible viewport (exactly N rows, no more)
 	 * This returns the actual visible portion of the terminal
+	 * @param rows Number of rows to return
+	 * @param scrollOffset Number of lines to scroll up from bottom (0 = live/bottom)
 	 */
-	getViewport(rows?: number): string[] {
+	getViewport(rows?: number, scrollOffset: number = 0): string[] {
 		const numRows = rows || this.terminal.rows;
 		const buffer = this.terminal.buffer.active;
 		const viewport: string[] = [];
 		
-		// Calculate the viewport start based on cursor position and scrollback
-		const viewportStart = buffer.viewportY;
+		// Calculate viewport start: go back by scrollOffset from current viewport
+		const viewportStart = Math.max(0, buffer.viewportY - scrollOffset);
 		
 		for (let i = 0; i < numRows; i++) {
 			const line = buffer.getLine(viewportStart + i);
