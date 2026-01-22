@@ -15,8 +15,9 @@ const (
 // PasswordAuth implements Provider using password authentication
 // Passwords are stored securely in the OS keychain
 type PasswordAuth struct {
-	ring   keyring.Keyring
-	client *ssh.Client
+	ring         keyring.Keyring
+	client       *ssh.Client
+	tempPassword string // Temporary password for testing (not stored)
 }
 
 // NewPasswordAuth creates a new password authentication provider
@@ -42,12 +43,42 @@ func NewPasswordAuth() (*PasswordAuth, error) {
 	}, nil
 }
 
+// NewPasswordAuthWithTemp creates a provider with a temporary password (for testing)
+func NewPasswordAuthWithTemp(tempPassword string) (*PasswordAuth, error) {
+	// Initialize OS keyring (may not be used if temp password is provided)
+	ring, err := keyring.Open(keyring.Config{
+		ServiceName:              keyringService,
+		KeychainTrustApplication: true,
+		AllowedBackends: []keyring.BackendType{
+			keyring.KeychainBackend,
+			keyring.SecretServiceBackend,
+			keyring.WinCredBackend,
+			keyring.FileBackend,
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to open keyring: %w", err)
+	}
+
+	return &PasswordAuth{
+		ring:         ring,
+		tempPassword: tempPassword,
+	}, nil
+}
+
 // Connect establishes an SSH connection using password authentication
 func (a *PasswordAuth) Connect(v *vm.VM) (*ssh.Client, error) {
-	// Get password from keyring
-	password, err := a.GetPassword(v.ID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get password: %w", err)
+	var password string
+	var err error
+
+	// Use temporary password if provided, otherwise get from keyring
+	if a.tempPassword != "" {
+		password = a.tempPassword
+	} else {
+		password, err = a.GetPassword(v.ID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get password: %w", err)
+		}
 	}
 
 	// Configure SSH client

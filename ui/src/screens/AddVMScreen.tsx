@@ -7,7 +7,7 @@ import { ipcClient } from '../core/ipc.js';
 
 interface AddVMScreenProps {
 	onCancel: () => void;
-	onSubmit: (vm: Partial<VM>) => void;
+	onSubmit: (vm: Partial<VM>, password?: string) => void;
 }
 
 type FormStep = 'auth-type' | 'details';
@@ -95,17 +95,11 @@ export default function AddVMScreen({ onCancel, onSubmit }: AddVMScreenProps) {
 				}
 			};
 
-			// Test connection
-			await ipcClient.testConnection(vm);
+			// Test connection (pass password for testing, don't store yet)
+			await ipcClient.testConnection(vm, authType === 'password' ? formData.password : undefined);
 
-			// Store password if using password auth
-			if (authType === 'password' && formData.password) {
-				// Password will be stored when VM is added
-				// For now, we'll pass it through the submission
-			}
-
-			// Submit
-			onSubmit(vm);
+			// Submit - pass password to parent for storage after VM is added
+			onSubmit(vm, authType === 'password' ? formData.password : undefined);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : 'Failed to add VM');
 		} finally {

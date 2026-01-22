@@ -314,10 +314,13 @@ export class IPCClient extends EventEmitter {
 	/**
 	 * Test connection to a VM
 	 */
-	async testConnection(vm: Partial<VM>): Promise<void> {
+	async testConnection(vm: Partial<VM>, password?: string): Promise<void> {
 		const response = await this.sendRequest({
 			action: 'test_connection',
-			params: { vm }
+			params: { 
+				vm,
+				password // Pass password for testing, won't be stored
+			}
 		});
 
 		if (response.status === 'error') {

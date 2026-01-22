@@ -453,6 +453,9 @@ func (h *Handler) handleTestConnection(params map[string]interface{}) Response {
 	authTypeStr, _ := authData["type"].(string)
 	keyPath, _ := authData["keyPath"].(string)
 
+	// Get temporary password from params (for testing only)
+	tempPassword, _ := params["password"].(string)
+
 	var authType vm.AuthType
 	switch authTypeStr {
 	case "key":
@@ -476,8 +479,17 @@ func (h *Handler) handleTestConnection(params map[string]interface{}) Response {
 		},
 	}
 
-	// Create auth provider
-	provider, err := auth.NewProvider(testVM)
+	// Create auth provider with temporary password if provided
+	var provider auth.Provider
+	var err error
+	
+	if authType == vm.AuthTypePassword && tempPassword != "" {
+		// Use temporary password for testing
+		provider, err = auth.NewPasswordAuthWithTemp(tempPassword)
+	} else {
+		provider, err = auth.NewProvider(testVM)
+	}
+	
 	if err != nil {
 		return NewErrorResponse(err)
 	}

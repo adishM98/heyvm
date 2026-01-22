@@ -10,7 +10,8 @@
 
 - **Split-Pane Interface**: View your VM list and details side-by-side
 - **Interactive TUI**: Fully keyboard-driven navigation with intuitive controls
-- **Embedded SSH Terminal**: Connect to VMs directly from the interface
+- **Full Terminal Emulator**: Complete SSH terminal with xterm.js - vim, nano, htop all work
+- **Terminal Scrollback**: 1000 lines of history with smooth scrolling
 - **File Browser**: Dual-pane file manager for easy local ↔ remote file transfers
 - **Secure Credentials**: Password and SSH key storage via OS keychain
 - **Multiple Auth Methods**: Support for SSH keys and password authentication
@@ -106,11 +107,18 @@ Navigate between panes using keyboard shortcuts to efficiently manage your VMs.
 
 #### VM Detail (Right Pane)
 - **`1`** - Switch to Overview tab
-- **`2`** - Switch to Terminal tab
+- **`2`** - Switch to Terminal tab  
 - **`3`** - Switch to Files tab
 - **`c`** - Connect to VM (establish SSH session)
 - **`x`** - Disconnect from VM
 - **`Esc`** - Return focus to VM list (left pane)
+
+#### Terminal Tab
+- **All keys** - Sent directly to remote shell (complete terminal liberty)
+- **`PgUp`/`PgDn`** or **`Shift+↑`/`↓`** - Scroll through terminal history (1000 lines)
+- **`Ctrl+O`** - Switch to Overview tab (keeps session alive)
+- **`Esc`** - Return to VM list
+- **Interactive programs**: vim, nano, htop, sudo all work perfectly
 
 #### File Browser
 - **`Tab`** - Switch between local (left) and remote (right) file panes
@@ -143,10 +151,12 @@ heyvm will automatically validate the connection and persist the VM configuratio
 
 1. Select a VM from the list with **`Enter`**
 2. Press **`c`** to establish SSH connection
-3. Switch to Terminal tab (**`2`**) to interact with the remote shell
+3. Switch to Terminal tab (**`2`**) for full interactive shell:
+   - Complete terminal emulator with ANSI support
+   - Works with vim, nano, htop, sudo, and all interactive programs
+   - Scroll through history with **`PgUp`/`PgDn`** or **`Shift+↑`/`↓`**
+   - Press **`Ctrl+O`** to switch to Overview without closing terminal
 4. Or switch to Files tab (**`3`**) to browse and transfer files
-
-Connection status is displayed in the Overview tab.
 
 ## Development
 
@@ -174,6 +184,8 @@ heyvm/
 │   │   │   ├── useVM.ts
 │   │   │   ├── useVMList.ts
 │   │   │   └── useFiles.ts
+│   │   ├── utils/            # Utility functions
+│   │   │   └── terminalEmulator.ts  # xterm.js wrapper
 │   │   ├── core/             # IPC client and type definitions
 │   │   │   ├── ipc.ts
 │   │   │   └── types.ts
@@ -234,6 +246,7 @@ heyvm/
 - **Framework**: [Ink](https://github.com/vadimdemedes/ink) - React for interactive CLIs
 - **Language**: TypeScript
 - **Build Tool**: esbuild
+- **Terminal Emulator**: [@xterm/headless](https://www.npmjs.com/package/@xterm/headless) - Full ANSI/VT100 support
 - **Key Libraries**:
   - `ink-select-input` - Interactive selection lists
   - `ink-text-input` - Text input components
@@ -429,7 +442,9 @@ If you encounter issues:
 - ✅ VM management and storage
 - ✅ SSH key and password authentication
 - ✅ Split-pane TUI interface
-- ✅ Embedded SSH terminal
+- ✅ Full terminal emulator (xterm.js with ANSI/VT100 support)
+- ✅ Terminal scrollback (1000 lines)
+- ✅ Interactive programs support (vim, nano, htop, sudo)
 - ✅ File browser with dual-pane view
 - ✅ Secure credential storage
 
