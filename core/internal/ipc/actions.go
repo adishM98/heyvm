@@ -1,6 +1,7 @@
 package ipc
 
 import (
+	"encoding/base64"
 	"fmt"
 	"io"
 	"log"
@@ -512,12 +513,20 @@ func (h *Handler) handleStartPTY(params map[string]interface{}) Response {
 	// Get SSH manager
 	sshMgr, err := h.getSSHManager(vmID)
 	if err != nil {
+		h.Emit(EventPTYError, map[string]interface{}{
+			"vm_id": vmID,
+			"error": err.Error(),
+		})
 		return NewErrorResponse(err)
 	}
 
 	// Ensure connected
 	if !sshMgr.IsConnected() {
 		if err := sshMgr.Connect(); err != nil {
+			h.Emit(EventPTYError, map[string]interface{}{
+				"vm_id": vmID,
+				"error": err.Error(),
+			})
 			return NewErrorResponse(err)
 		}
 	}
@@ -525,15 +534,58 @@ func (h *Handler) handleStartPTY(params map[string]interface{}) Response {
 	// Start PTY session
 	session, err := sshMgr.StartPTY(int(rows), int(cols))
 	if err != nil {
+		h.Emit(EventPTYError, map[string]interface{}{
+			"vm_id": vmID,
+			"error": err.Error(),
+		})
 		return NewErrorResponse(err)
 	}
 
-	return NewSuccessResponse(map[string]interface{}{
-		"session_id": session.ID(),
+	sessionID := session.ID()
+
+	// Emit PTY_READY event
+	h.Emit(EventPTYReady, map[string]interface{}{
+		"vm_id":      vmID,
+		"session_id": sessionID,
 	})
+
+	// Start THE ONLY goroutine that reads from combined stdout+stderr
+	// This keeps stdin alive and ensures all output is captured
+	go func() {
+		combined := session.CombinedOutput()
+		buf := make([]byte, 4096)
+		for {
+			// Blocking read from combined output - this is the only reader
+			n, err := combined.Read(buf)
+			if n > 0 {
+				// Base64 encode PTY output to keep JSON safe
+				encoded := base64.StdEncoding.EncodeToString(buf[:n])
+				// Emit PTY_OUTPUT event with base64-encoded data
+				h.Emit(EventPTYOutput, map[string]interface{}{
+					"session_id": sessionID,
+					"data":       encoded,
+				})
+			}
+			if err != nil {
+				if err == io.EOF {
+					log.Printf("PTY session %s: combined output EOF (shell exited)", sessionID)
+				} else {
+					log.Printf("PTY session %s: read error: %v", sessionID, err)
+				}
+				// Emit PTY_EXIT event
+				h.Emit(EventPTYExit, map[string]interface{}{
+					"session_id": sessionID,
+				})
+				break
+			}
+		}
+	}()
+
+	// No response needed - events are emitted instead
+	return Response{}
 }
 
-// handleWriteToPTY writes data to a PTY session
+// handleWriteToPTY writes data to a PTY session (fire-and-forget)
 func (h *Handler) handleWriteToPTY(params map[string]interface{}) Response {
 	vmID, ok := params["vm_id"].(string)
 	if !ok {
@@ -562,58 +614,65 @@ func (h *Handler) handleWriteToPTY(params map[string]interface{}) Response {
 		return NewErrorResponse(err)
 	}
 
-	// Write data
-	n, err := session.Write([]byte(data))
-	if err != nil {
-		return NewErrorResponse(err)
-	}
+	// Write data (non-blocking from IPC perspective - fire and forget)
+	go func() {
+		_, err := session.Write([]byte(data))
+		if err != nil {
+			log.Printf("PTY session %s: write error: %v", sessionID, err)
+		}
+	}()
 
-	return NewSuccessResponse(map[string]interface{}{
-		"bytes_written": n,
-	})
+	// No response needed
+	return Response{}
 }
 
-// handleReadFromPTY reads data from a PTY session
-func (h *Handler) handleReadFromPTY(params map[string]interface{}) Response {
+// handleResizePTY resizes a PTY session
+func (h *Handler) handleResizePTY(params map[string]interface{}) Response {
 	vmID, ok := params["vm_id"].(string)
 	if !ok {
-		return NewErrorResponseWithMessage("vm_id parameter required")
+		log.Printf("PTY resize: vm_id parameter required")
+		return Response{}
 	}
 
 	sessionID, ok := params["session_id"].(string)
 	if !ok {
-		return NewErrorResponseWithMessage("session_id parameter required")
+		log.Printf("PTY resize: session_id parameter required")
+		return Response{}
 	}
 
-	maxBytes, ok := params["max_bytes"].(float64)
+	rows, ok := params["rows"].(float64)
 	if !ok {
-		maxBytes = 4096 // Default buffer size
+		log.Printf("PTY resize: rows parameter required")
+		return Response{}
+	}
+
+	cols, ok := params["cols"].(float64)
+	if !ok {
+		log.Printf("PTY resize: cols parameter required")
+		return Response{}
 	}
 
 	// Get SSH manager
 	sshMgr, err := h.getSSHManager(vmID)
 	if err != nil {
-		return NewErrorResponse(err)
+		log.Printf("PTY resize error for VM %s: %v", vmID, err)
+		return Response{}
 	}
 
 	// Get session
 	session, err := sshMgr.GetSession(sessionID)
 	if err != nil {
-		return NewErrorResponse(err)
+		log.Printf("PTY resize error getting session %s: %v", sessionID, err)
+		return Response{}
 	}
 
-	// Read data
-	buf := make([]byte, int(maxBytes))
-	n, err := session.Read(buf)
-	
-	if err != nil && err != io.EOF {
-		return NewErrorResponse(err)
+	// Resize
+	if err := session.Resize(int(rows), int(cols)); err != nil {
+		log.Printf("PTY resize error for session %s: %v", sessionID, err)
 	}
 
-	return NewSuccessResponse(map[string]interface{}{
-		"data":       string(buf[:n]),
-		"bytes_read": n,
-	})
+	// No response needed
+	return Response{}
 }
 
 // handleClosePTY closes a PTY session
@@ -631,13 +690,15 @@ func (h *Handler) handleClosePTY(params map[string]interface{}) Response {
 	// Get SSH manager
 	sshMgr, err := h.getSSHManager(vmID)
 	if err != nil {
-		return NewErrorResponse(err)
+		log.Printf("PTY close error for VM %s: %v", vmID, err)
+		return Response{}
 	}
 
 	// Close session
 	if err := sshMgr.CloseSession(sessionID); err != nil {
-		return NewErrorResponse(err)
+		log.Printf("PTY close error for session %s: %v", sessionID, err)
 	}
 
-	return NewSuccessResponseWithMessage("PTY session closed", nil)
+	// No response needed
+	return Response{}
 }

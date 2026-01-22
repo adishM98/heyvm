@@ -13,6 +13,7 @@ type Response struct {
 	Status    string      `json:"status"`  // "success" | "error"
 	Message   string      `json:"message,omitempty"`
 	Data      interface{} `json:"data,omitempty"`
+	Event     string      `json:"event,omitempty"` // For event-based messages
 }
 
 // NewSuccessResponse creates a success response
@@ -102,6 +103,23 @@ const (
 	ActionTestConnection  = "test_connection"
 	ActionStartPTY        = "start_pty"
 	ActionWriteToPTY      = "write_to_pty"
-	ActionReadFromPTY     = "read_from_pty"
+	ActionResizePTY       = "resize_pty"
 	ActionClosePTY        = "close_pty"
 )
+
+// Event constants
+const (
+	EventPTYReady  = "PTY_READY"
+	EventPTYOutput = "PTY_OUTPUT"
+	EventPTYExit   = "PTY_EXIT"
+	EventPTYError  = "PTY_ERROR"
+)
+
+// NewEvent creates an event response (no request ID needed)
+func NewEvent(event string, data interface{}) Response {
+	return Response{
+		Status: "success",
+		Event:  event,
+		Data:   data,
+	}
+}

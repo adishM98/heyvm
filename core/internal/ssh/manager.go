@@ -3,6 +3,7 @@ package ssh
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"sync"
 
 	"github.com/adishm/heyvm/internal/auth"
@@ -164,18 +165,18 @@ func (m *Manager) StartPTY(rows, cols int) (*Session, error) {
 		return nil, fmt.Errorf("failed to start shell: %w", err)
 	}
 
+	// Merge stdout and stderr into single stream
+	// This prevents SSH deadlocks and ensures all output is captured
+	combinedOutput := io.MultiReader(stdout, stderr)
+
 	// Create session wrapper
 	session := &Session{
-		session: sshSession,
-		stdin:   stdin,
-		stdout:  stdout,
-		stderr:  stderr,
-		rows:    rows,
-		cols:    cols,
+		session:        sshSession,
+		stdin:          stdin,
+		combinedOutput: combinedOutput,
+		rows:           rows,
+		cols:           cols,
 	}
-
-	// Start background output reader
-	session.startOutputReader()
 
 	// Store session
 	m.mu.Lock()

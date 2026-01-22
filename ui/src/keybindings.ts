@@ -44,8 +44,13 @@ export const KEYBINDINGS = {
 
 	// Terminal Tab
 	terminal: {
-		submit: { keys: ['return'], description: 'execute command' },
-		clear: { keys: ['ctrl+l'], description: 'clear history' },
+		// All input is passed directly to the PTY session
+		// Special keys:
+		// - Ctrl+C: Send interrupt signal
+		// - Ctrl+D: Send EOF/exit signal
+		// - Ctrl+Z: Send suspend signal
+		// - Arrow keys: Navigate command history and cursor
+		// - Tab: Auto-complete (if supported by shell)
 	},
 
 	// Files Tab

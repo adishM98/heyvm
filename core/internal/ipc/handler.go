@@ -23,6 +23,7 @@ type Handler struct {
 	mu           sync.RWMutex
 	input        io.Reader
 	output       io.Writer
+	outputMu     sync.Mutex // Protect output writes
 }
 
 // NewHandler creates a new IPC handler
@@ -34,6 +35,19 @@ func NewHandler(registry *vm.Registry) *Handler {
 		authProviders: make(map[string]auth.Provider),
 		input:         os.Stdin,
 		output:        os.Stdout,
+	}
+}
+
+// Emit sends an event to the UI (non-blocking, fire-and-forget)
+func (h *Handler) Emit(event string, data interface{}) {
+	h.outputMu.Lock()
+	defer h.outputMu.Unlock()
+
+	encoder := json.NewEncoder(h.output)
+	response := NewEvent(event, data)
+	
+	if err := encoder.Encode(response); err != nil {
+		log.Printf("IPC handler: error emitting event %s: %v", event, err)
 	}
 }
 
@@ -60,11 +74,20 @@ func (h *Handler) Start() error {
 		// Handle request
 		resp := h.HandleRequest(req)
 
-		// Send response
-		if err := encoder.Encode(resp); err != nil {
-			log.Printf("IPC handler: error encoding response: %v", err)
+		// Skip sending response for fire-and-forget actions (empty response)
+		if resp.Status == "" {
+			log.Printf("IPC handler: fire-and-forget action, no response sent")
 			continue
 		}
+
+		// Send response
+		h.outputMu.Lock()
+		if err := encoder.Encode(resp); err != nil {
+			log.Printf("IPC handler: error encoding response: %v", err)
+			h.outputMu.Unlock()
+			continue
+		}
+		h.outputMu.Unlock()
 
 		log.Printf("IPC handler: sent response: status=%s", resp.Status)
 	}
@@ -106,13 +129,21 @@ func (h *Handler) HandleRequest(req Request) Response {
 	case ActionTestConnection:
 		resp = h.handleTestConnection(req.Params)
 	case ActionStartPTY:
-		resp = h.handleStartPTY(req.Params)
+		// Fire-and-forget: handle but don't send response
+		go h.handleStartPTY(req.Params)
+		return Response{} // Return empty response (won't be sent)
 	case ActionWriteToPTY:
-		resp = h.handleWriteToPTY(req.Params)
-	case ActionReadFromPTY:
-		resp = h.handleReadFromPTY(req.Params)
+		// Fire-and-forget: handle but don't send response
+		go h.handleWriteToPTY(req.Params)
+		return Response{} // Return empty response (won't be sent)
+	case ActionResizePTY:
+		// Fire-and-forget: handle but don't send response
+		go h.handleResizePTY(req.Params)
+		return Response{} // Return empty response (won't be sent)
 	case ActionClosePTY:
-		resp = h.handleClosePTY(req.Params)
+		// Fire-and-forget: handle but don't send response
+		go h.handleClosePTY(req.Params)
+		return Response{} // Return empty response (won't be sent)
 	default:
 		resp = NewErrorResponseWithMessage(fmt.Sprintf("unknown action: %s", req.Action))
 	}
