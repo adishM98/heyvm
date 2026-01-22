@@ -69,6 +69,11 @@ export default function App() {
 		// Modal takes precedence
 		if (showAddVMModal) return;
 
+		// Terminal has complete input priority - don't intercept ANYTHING when terminal is active
+		if (activePaneSide === 'right' && selectedVM && activeTab === 'terminal') {
+			return; // Let terminal handle all input
+		}
+
 		// Global quit (only from left pane with no selection)
 		if (input === 'q' && activePaneSide === 'left' && !selectedVM) {
 			exit();
@@ -88,8 +93,8 @@ export default function App() {
 			return;
 		}
 
-		// Tab switching via number keys (only from right pane)
-		if (activePaneSide === 'right' && selectedVM) {
+		// Tab switching via number keys (only from right pane, NOT in terminal)
+		if (activePaneSide === 'right' && selectedVM && activeTab !== 'terminal') {
 			if (input === '1') {
 				setActiveTab('overview');
 				return;

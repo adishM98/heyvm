@@ -129,8 +129,7 @@ const TerminalTab = React.memo(
 			// Decode base64 PTY output
 			const decoded = Buffer.from(data, 'base64').toString('utf-8');
 			
-			// Feed to emulator which processes ANSI escape sequences
-			// Terminal emulator owns the state, not React
+			// Feed to emulator (optimized - no updateLines() overhead)
 			if (emulatorRef.current) {
 				emulatorRef.current.write(decoded);
 				scheduleUpdate(); // Throttled re-render at ~60fps
@@ -192,31 +191,42 @@ const TerminalTab = React.memo(
 		}
 	}, [vm.status, sessionId, vm.id]);
 
-	// Handle raw input - send directly to PTY with proper escape sequences
+	// Handle all keyboard input - optimized for vim/nano
 	useInput((input, key) => {
 		if (!isActive || !sessionId || vm.status !== 'connected') return;
 		
-		// Handle control keys
-		if (key.ctrl && input === 'c') return ipcClient.writeToPTY(vm.id, sessionId, '\x03');
-		if (key.ctrl && input === 'd') return ipcClient.writeToPTY(vm.id, sessionId, '\x04');
-		if (key.ctrl && input === 'z') return ipcClient.writeToPTY(vm.id, sessionId, '\x1a');
+		// Escape key (critical for vim)
+		if (key.escape) return ipcClient.writeToPTY(vm.id, sessionId, '\x1b');
 		
-		// Handle special keys
-		if (key.return) return ipcClient.writeToPTY(vm.id, sessionId, '\n');
+		// Ctrl+key combinations
+		if (key.ctrl && input) {
+			const char = input.toLowerCase();
+			if (char >= 'a' && char <= 'z') {
+				const code = char.charCodeAt(0) - 96; // Ctrl+A = 1, Ctrl+B = 2, etc
+				return ipcClient.writeToPTY(vm.id, sessionId, String.fromCharCode(code));
+			}
+		}
+		
+		// Special keys
+		if (key.return) return ipcClient.writeToPTY(vm.id, sessionId, '\r');
 		if (key.backspace || key.delete) return ipcClient.writeToPTY(vm.id, sessionId, '\x7f');
 		if (key.tab) return ipcClient.writeToPTY(vm.id, sessionId, '\t');
 		
-		// Handle arrow keys with ANSI escape sequences
+		// Arrow keys
 		if (key.upArrow) return ipcClient.writeToPTY(vm.id, sessionId, '\x1b[A');
 		if (key.downArrow) return ipcClient.writeToPTY(vm.id, sessionId, '\x1b[B');
 		if (key.leftArrow) return ipcClient.writeToPTY(vm.id, sessionId, '\x1b[D');
 		if (key.rightArrow) return ipcClient.writeToPTY(vm.id, sessionId, '\x1b[C');
 		
-		// Send regular character input
-		if (input) {
+		// Page Up/Down
+		if (key.pageDown) return ipcClient.writeToPTY(vm.id, sessionId, '\x1b[6~');
+		if (key.pageUp) return ipcClient.writeToPTY(vm.id, sessionId, '\x1b[5~');
+		
+		// Regular characters (including numbers)
+		if (input && !key.ctrl && !key.meta) {
 			ipcClient.writeToPTY(vm.id, sessionId, input);
 		}
-	});
+	}, { isActive });
 
 	return (
 		<Box flexDirection="column" height="100%">
@@ -241,7 +251,7 @@ const TerminalTab = React.memo(
 						const isOnThisLine = cursorRow - viewportY === i;
 						
 						if (isOnThisLine && cursorVisible && sessionId) {
-							// Insert cursor at the correct position
+							// Render cursor
 							const beforeCursor = line.substring(0, cursorCol);
 							const atCursor = line[cursorCol] || ' ';
 							const afterCursor = line.substring(cursorCol + 1);

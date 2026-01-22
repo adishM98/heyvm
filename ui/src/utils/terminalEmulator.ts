@@ -6,29 +6,25 @@ import { Terminal } from '@xterm/headless';
  */
 export class TerminalEmulator {
 	private terminal: Terminal;
-	private lines: string[] = [];
 
 	constructor(rows: number = 24, cols: number = 80) {
 		this.terminal = new Terminal({
 			rows,
 			cols,
 			allowProposedApi: true,
+			scrollback: 1000,
 		});
 
-		// Update our line buffer whenever the terminal changes
-		this.terminal.onData(() => {
-			this.updateLines();
-		});
-
-		this.updateLines();
+		// Note: onData is for user input, not needed here
+		// Terminal output is processed via write()
 	}
 
 	/**
 	 * Write data to the terminal (processes ANSI escape sequences)
+	 * CRITICAL: Do NOT call updateLines here - it's too slow
 	 */
 	write(data: string): void {
 		this.terminal.write(data);
-		this.updateLines();
 	}
 
 	/**
@@ -36,14 +32,21 @@ export class TerminalEmulator {
 	 */
 	resize(rows: number, cols: number): void {
 		this.terminal.resize(cols, rows);
-		this.updateLines();
 	}
 
 	/**
 	 * Get the current screen content as lines of text
 	 */
 	getLines(): string[] {
-		return this.lines;
+		const buffer = this.terminal.buffer.active;
+		const lines: string[] = [];
+		for (let i = 0; i < buffer.length; i++) {
+			const line = buffer.getLine(i);
+			if (line) {
+				lines.push(line.translateToString(true));
+			}
+		}
+		return lines;
 	}
 
 	/**
@@ -82,28 +85,10 @@ export class TerminalEmulator {
 	}
 
 	/**
-	 * Update the lines buffer from the terminal buffer
-	 */
-	private updateLines(): void {
-		const buffer = this.terminal.buffer.active;
-		const newLines: string[] = [];
-
-		for (let i = 0; i < buffer.length; i++) {
-			const line = buffer.getLine(i);
-			if (line) {
-				newLines.push(line.translateToString(true));
-			}
-		}
-
-		this.lines = newLines;
-	}
-
-	/**
 	 * Clear the terminal
 	 */
 	clear(): void {
 		this.terminal.clear();
-		this.updateLines();
 	}
 
 	/**
