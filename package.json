@@ -11,6 +11,8 @@
     "prepublishOnly": "npm run build",
     "build": "npm run build:ui",
     "build:ui": "cd ui && npm install && npm run build",
+    "version": "echo \"Version updated to $(node -p 'require(\"./package.json\").version')\"",
+    "publish:public": "npm publish --access public",
     "dev": "make dev",
     "test": "make test"
   },
