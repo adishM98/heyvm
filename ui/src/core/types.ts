@@ -28,6 +28,15 @@ export interface FileInfo {
 	isDir: boolean;
 }
 
+export interface TransferProgress {
+	vm_id: string;
+	file: string;
+	direction: 'upload' | 'download';
+	bytes_transferred: number;
+	total_bytes: number;
+	percent: number;
+}
+
 export interface IPCRequest {
 	request_id?: number;
 	action: string;

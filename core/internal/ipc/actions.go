@@ -296,10 +296,21 @@ func (h *Handler) handleUploadFile(params map[string]interface{}) Response {
 		return NewErrorResponse(err)
 	}
 
-	// Upload file
+	// Upload file with progress reporting
 	opts := &sftp.TransferOptions{
 		Overwrite:           true,
 		PreservePermissions: true,
+		OnProgress: func(bytesTransferred, totalBytes int64) {
+			// Emit progress event to UI
+			h.Emit(EventTransferProgress, map[string]interface{}{
+				"vm_id":             vmID,
+				"file":              remotePath,
+				"direction":         "upload",
+				"bytes_transferred": bytesTransferred,
+				"total_bytes":       totalBytes,
+				"percent":           float64(bytesTransferred) / float64(totalBytes) * 100,
+			})
+		},
 	}
 
 	if err := sftpMgr.Upload(localPath, remotePath, opts); err != nil {
@@ -332,10 +343,21 @@ func (h *Handler) handleDownloadFile(params map[string]interface{}) Response {
 		return NewErrorResponse(err)
 	}
 
-	// Download file
+	// Download file with progress reporting
 	opts := &sftp.TransferOptions{
 		Overwrite:           true,
 		PreservePermissions: true,
+		OnProgress: func(bytesTransferred, totalBytes int64) {
+			// Emit progress event to UI
+			h.Emit(EventTransferProgress, map[string]interface{}{
+				"vm_id":             vmID,
+				"file":              remotePath,
+				"direction":         "download",
+				"bytes_transferred": bytesTransferred,
+				"total_bytes":       totalBytes,
+				"percent":           float64(bytesTransferred) / float64(totalBytes) * 100,
+			})
+		},
 	}
 
 	if err := sftpMgr.Download(remotePath, localPath, opts); err != nil {

@@ -109,10 +109,11 @@ const (
 
 // Event constants
 const (
-	EventPTYReady  = "PTY_READY"
-	EventPTYOutput = "PTY_OUTPUT"
-	EventPTYExit   = "PTY_EXIT"
-	EventPTYError  = "PTY_ERROR"
+	EventPTYReady         = "PTY_READY"
+	EventPTYOutput        = "PTY_OUTPUT"
+	EventPTYExit          = "PTY_EXIT"
+	EventPTYError         = "PTY_ERROR"
+	EventTransferProgress = "TRANSFER_PROGRESS"
 )
 
 // NewEvent creates an event response (no request ID needed)

@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react';
-import type { VM, FileInfo } from '../core/types.js';
+import { useState, useCallback, useEffect } from 'react';
+import type { VM, FileInfo, TransferProgress } from '../core/types.js';
 import { ipcClient } from '../core/ipc.js';
 
 export function useFiles(vm: VM) {
@@ -7,6 +7,22 @@ export function useFiles(vm: VM) {
 	const [loading, setLoading] = useState(false);
 	const [transferring, setTransferring] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [transferProgress, setTransferProgress] = useState<TransferProgress | null>(null);
+
+	// Listen for transfer progress events
+	useEffect(() => {
+		const handleProgress = (progress: TransferProgress) => {
+			if (progress.vm_id === vm.id) {
+				setTransferProgress(progress);
+			}
+		};
+
+		ipcClient.on('TRANSFER_PROGRESS', handleProgress);
+
+		return () => {
+			ipcClient.off('TRANSFER_PROGRESS', handleProgress);
+		};
+	}, [vm.id]);
 
 	const listFiles = useCallback(async (path: string) => {
 		try {
@@ -27,7 +43,9 @@ export function useFiles(vm: VM) {
 		try {
 			setTransferring(true);
 			setError(null);
+			setTransferProgress(null);
 			await ipcClient.uploadFile(vm.id, localPath, remotePath);
+			setTransferProgress(null);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : 'Upload failed');
 			throw err;
@@ -40,7 +58,9 @@ export function useFiles(vm: VM) {
 		try {
 			setTransferring(true);
 			setError(null);
+			setTransferProgress(null);
 			await ipcClient.downloadFile(vm.id, remotePath, localPath);
+			setTransferProgress(null);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : 'Download failed');
 			throw err;
@@ -73,6 +93,7 @@ export function useFiles(vm: VM) {
 		files,
 		loading,
 		transferring,
+		transferProgress,
 		error,
 		listFiles,
 		uploadFile,

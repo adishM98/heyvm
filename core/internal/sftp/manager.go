@@ -102,7 +102,8 @@ func (m *Manager) Upload(localPath, remotePath string, opts *TransferOptions) er
 	totalBytes := localInfo.Size()
 	var bytesTransferred int64
 
-	buf := make([]byte, 32*1024) // 32KB buffer
+	// Use 128KB buffer for better throughput on large files
+	buf := make([]byte, 128*1024)
 	for {
 		n, err := localFile.Read(buf)
 		if err != nil && err != io.EOF {
@@ -183,7 +184,8 @@ func (m *Manager) Download(remotePath, localPath string, opts *TransferOptions) 
 	totalBytes := remoteInfo.Size()
 	var bytesTransferred int64
 
-	buf := make([]byte, 32*1024) // 32KB buffer
+	// Use 128KB buffer for better throughput on large files
+	buf := make([]byte, 128*1024)
 	for {
 		n, err := remoteFile.Read(buf)
 		if err != nil && err != io.EOF {

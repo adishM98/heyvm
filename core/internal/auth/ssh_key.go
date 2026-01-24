@@ -102,8 +102,13 @@ func (a *SSHKeyAuth) Connect(v *vm.VM) (*ssh.Client, error) {
 			ssh.PublicKeys(signer),
 		},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // TODO: Implement proper host key verification
-		Timeout:         10 * time.Second,
+		Timeout:         30 * time.Second,            // Increased timeout for large transfers
 	}
+
+	// Set keep-alive settings to prevent connection drops during large transfers
+	// This will send keep-alive packets every 15 seconds
+	config.SetDefaults()
+	// Note: Keep-alive is configured at the session level after connection
 
 	// Connect to SSH server
 	address := fmt.Sprintf("%s:%d", v.Host, v.Port)

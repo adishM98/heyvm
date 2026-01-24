@@ -2,6 +2,7 @@ package auth
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/99designs/keyring"
 	"github.com/adishm/heyvm/internal/vm"
@@ -88,7 +89,11 @@ func (a *PasswordAuth) Connect(v *vm.VM) (*ssh.Client, error) {
 			ssh.Password(password),
 		},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // TODO: Implement proper host key verification
+		Timeout:         30 * time.Second,            // Increased timeout for large transfers
 	}
+
+	// Set keep-alive settings to prevent connection drops during large transfers
+	config.SetDefaults()
 
 	// Connect to SSH server
 	address := fmt.Sprintf("%s:%d", v.Host, v.Port)

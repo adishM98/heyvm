@@ -4,6 +4,7 @@ import TextInput from 'ink-text-input';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { VM, FileInfo } from '../../core/types.js';
+import { useFiles } from '../../hooks/useFiles.js';
 import { ipcClient } from '../../core/ipc.js';
 
 interface FilesTabProps {
@@ -22,10 +23,11 @@ const FilesTab = React.memo(
 	const [remoteFiles, setRemoteFiles] = useState<FileInfo[]>([]);
 	const [localState, setLocalState] = useState({ selectedIndex: 0, scrollOffset: 0 });
 	const [remoteState, setRemoteState] = useState({ selectedIndex: 0, scrollOffset: 0 });
-	const [error, setError] = useState<string | null>(null);
-	const [transferring, setTransferring] = useState(false);
 	const [searchMode, setSearchMode] = useState(false);
 	const [searchQuery, setSearchQuery] = useState('');
+
+	// Use the useFiles hook for file operations and progress tracking
+	const { error, transferring, transferProgress, uploadFile: uploadFileHook, downloadFile: downloadFileHook } = useFiles(vm);
 
 	// Max visible files in each pane (adjust based on terminal height)
 	// Accounting for header, status bars, etc., roughly 20 files visible
@@ -70,13 +72,12 @@ const FilesTab = React.memo(
 			setLocalFiles(files);
 			setLocalState({ selectedIndex: 0, scrollOffset: 0 }); // Reset scroll when changing directory
 		} catch (err) {
-			setError(`Failed to read local directory: ${err instanceof Error ? err.message : 'Unknown error'}`);
+			console.error(`Failed to read local directory: ${err instanceof Error ? err.message : 'Unknown error'}`);
 		}
 	};
 
 	const loadRemoteFiles = async (dirPath: string) => {
 		try {
-			setError(null);
 			const files = await ipcClient.listFiles(vm.id, dirPath);
 
 			// Add parent directory entry if not at root
@@ -93,7 +94,7 @@ const FilesTab = React.memo(
 			setRemoteFiles(files);
 			setRemoteState({ selectedIndex: 0, scrollOffset: 0 }); // Reset scroll when changing directory
 		} catch (err) {
-			setError(`Failed to read remote directory: ${err instanceof Error ? err.message : 'Unknown error'}`);
+			console.error(`Failed to read remote directory: ${err instanceof Error ? err.message : 'Unknown error'}`);
 		}
 	};
 
@@ -128,18 +129,14 @@ const FilesTab = React.memo(
 		if (!file || file.isDir || file.name === '..') return;
 
 		try {
-			setTransferring(true);
-			setError(null);
-
 			const localFilePath = path.join(localPath, file.name);
 			const remoteFilePath = path.join(remotePath, file.name);
 
-			await ipcClient.uploadFile(vm.id, localFilePath, remoteFilePath);
+			await uploadFileHook(localFilePath, remoteFilePath);
 			await loadRemoteFiles(remotePath);
 		} catch (err) {
-			setError(`Upload failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
-		} finally {
-			setTransferring(false);
+			// Error is already handled in the hook
+			console.error('Upload failed:', err);
 		}
 	};
 
@@ -148,18 +145,14 @@ const FilesTab = React.memo(
 		if (!file || file.isDir || file.name === '..') return;
 
 		try {
-			setTransferring(true);
-			setError(null);
-
 			const remoteFilePath = path.join(remotePath, file.name);
 			const localFilePath = path.join(localPath, file.name);
 
-			await ipcClient.downloadFile(vm.id, remoteFilePath, localFilePath);
+			await downloadFileHook(remoteFilePath, localFilePath);
 			loadLocalFiles(localPath);
 		} catch (err) {
-			setError(`Download failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
-		} finally {
-			setTransferring(false);
+			// Error is already handled in the hook
+			console.error('Download failed:', err);
 		}
 	};
 
@@ -275,6 +268,32 @@ const FilesTab = React.memo(
 		return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)}G`;
 	};
 
+	const renderProgressBar = () => {
+		if (!transferProgress) return null;
+
+		const percent = Math.min(100, Math.max(0, transferProgress.percent));
+		const barWidth = 40;
+		const filledWidth = Math.round((percent / 100) * barWidth);
+		const emptyWidth = barWidth - filledWidth;
+		const bar = '█'.repeat(filledWidth) + '░'.repeat(emptyWidth);
+
+		const direction = transferProgress.direction === 'upload' ? '↑ Uploading' : '↓ Downloading';
+		const fileName = path.basename(transferProgress.file);
+
+		return (
+			<Box flexDirection="column" borderStyle="single" borderColor="cyan" paddingX={1} marginBottom={1}>
+				<Text color="cyan" bold>{direction}: {fileName}</Text>
+				<Box>
+					<Text color="green">{bar}</Text>
+					<Text> {percent.toFixed(1)}%</Text>
+				</Box>
+				<Text dimColor>
+					{formatFileSize(transferProgress.bytes_transferred)} / {formatFileSize(transferProgress.total_bytes)}
+				</Text>
+			</Box>
+		);
+	};
+
 	const renderFileList = (files: FileInfo[], selectedIndex: number, scrollOffset: number, isActive: boolean) => {
 		const visibleFiles = files.slice(scrollOffset, scrollOffset + maxVisibleFiles);
 		const hasMoreAbove = scrollOffset > 0;
@@ -336,10 +355,13 @@ const FilesTab = React.memo(
 				</Box>
 			)}
 
-			{/* Transferring message */}
-			{transferring && (
+			{/* Progress bar */}
+			{transferring && transferProgress && renderProgressBar()}
+
+			{/* Transferring message (when no detailed progress yet) */}
+			{transferring && !transferProgress && (
 				<Box marginBottom={1}>
-					<Text color="yellow">Transferring file...</Text>
+					<Text color="yellow">Initializing transfer...</Text>
 				</Box>
 			)}
 
