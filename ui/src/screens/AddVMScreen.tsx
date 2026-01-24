@@ -129,7 +129,7 @@ export default function AddVMScreen({ onCancel, onSubmit }: AddVMScreenProps) {
 		return (
 			<Box flexDirection="column" padding={1}>
 				<Box marginBottom={1}>
-					<Text bold color="cyan">Add New VM</Text>
+					<Text bold color="magenta">Add New VM</Text>
 				</Box>
 
 				<Box marginBottom={1}>
@@ -157,7 +157,7 @@ export default function AddVMScreen({ onCancel, onSubmit }: AddVMScreenProps) {
 	return (
 		<Box flexDirection="column" padding={1}>
 			<Box marginBottom={1}>
-				<Text bold color="cyan">Add New VM</Text>
+				<Text bold color="magenta">Add New VM</Text>
 			</Box>
 
 			<Box marginBottom={1}>

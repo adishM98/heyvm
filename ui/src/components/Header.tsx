@@ -9,7 +9,7 @@ interface HeaderProps {
 export default function Header({ title, subtitle }: HeaderProps) {
 	return (
 		<Box marginBottom={1}>
-			<Text bold color="cyan">
+			<Text bold color="magenta">
 				{title}
 			</Text>
 			{subtitle && (

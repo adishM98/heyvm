@@ -143,12 +143,12 @@ export default React.memo(function OverviewTab({ vm, isActive, onVMUpdated }: Ov
 				<Box>
 					{vm.status === 'disconnected' && (
 						<Text>
-							Press <Text bold color="cyan">c</Text> to connect
+							Press <Text bold color="magenta">c</Text> to connect
 						</Text>
 					)}
 					{vm.status === 'connected' && (
 						<Text>
-							Press <Text bold color="cyan">d</Text> to disconnect
+							Press <Text bold color="magenta">d</Text> to disconnect
 						</Text>
 					)}
 				</Box>

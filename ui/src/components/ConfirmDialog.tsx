@@ -18,7 +18,7 @@ export default function ConfirmDialog({ message, onConfirm, onCancel }: ConfirmD
 	});
 
 	return (
-		<Box flexDirection="column" borderStyle="double" borderColor="yellow" padding={1}>
+		<Box flexDirection="column" borderStyle="double" borderColor="magenta" padding={1}>
 			<Text>{message}</Text>
 			<Box marginTop={1}>
 				<Text dimColor>

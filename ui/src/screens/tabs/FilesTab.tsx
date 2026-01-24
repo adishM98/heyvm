@@ -279,10 +279,11 @@ const FilesTab = React.memo(
 
 		const direction = transferProgress.direction === 'upload' ? '↑ Uploading' : '↓ Downloading';
 		const fileName = path.basename(transferProgress.file);
+		const progressColor = transferProgress.direction === 'upload' ? 'magenta' : 'cyan';
 
 		return (
-			<Box flexDirection="column" borderStyle="single" borderColor="cyan" paddingX={1} marginBottom={1}>
-				<Text color="cyan" bold>{direction}: {fileName}</Text>
+			<Box flexDirection="column" borderStyle="single" borderColor={progressColor} paddingX={1} marginBottom={1}>
+				<Text color={progressColor} bold>{direction}: {fileName}</Text>
 				<Box>
 					<Text color="green">{bar}</Text>
 					<Text> {percent.toFixed(1)}%</Text>
@@ -317,9 +318,9 @@ const FilesTab = React.memo(
 					return (
 						<Box key={`${file.name}-${file.modTime}`}>
 							<Text>
-								<Text bold color={isSelected ? 'cyan' : undefined}>{isSelected ? '▶ ' : '  '}</Text>
-								{file.isDir ? '📁' : '📄'}{' '}
-								<Text bold={isSelected} color={isSelected ? 'cyan' : undefined}>{file.name}</Text>
+							<Text bold color={isSelected ? 'magenta' : undefined}>{isSelected ? '▶ ' : '  '}</Text>
+							{file.isDir ? '📁' : '📄'}{' '}
+							<Text bold={isSelected} color={isSelected ? 'magenta' : undefined}>{file.name}</Text>
 								{'  '}
 								<Text dimColor>{formatFileSize(file.size)}</Text>
 							</Text>
@@ -367,8 +368,8 @@ const FilesTab = React.memo(
 
 			{/* Search bar */}
 			{searchMode && (
-				<Box marginBottom={1} borderStyle="single" borderColor="cyan" paddingX={1}>
-					<Text bold color="cyan">Search: </Text>
+				<Box marginBottom={1} borderStyle="single" borderColor="magenta" paddingX={1}>
+					<Text bold color="magenta">Search: </Text>
 					<TextInput
 						value={searchQuery}
 						onChange={setSearchQuery}
@@ -383,7 +384,7 @@ const FilesTab = React.memo(
 			<Box flexGrow={1}>
 				{/* Local pane */}
 				<Box flexDirection="column" width="50%" borderStyle="single" borderColor="gray" paddingX={1}>
-					<Text bold color={activePane === 'local' ? 'cyan' : 'gray'}>
+					<Text bold color={activePane === 'local' ? 'magenta' : 'gray'}>
 						{activePane === 'local' ? '▶ ' : '  '}Local: {localPath}
 						{searchQuery && activePane === 'local' && <Text dimColor> (filtered: {getFilteredLocalFiles.length}/{localFiles.length})</Text>}
 					</Text>
@@ -394,7 +395,7 @@ const FilesTab = React.memo(
 
 				{/* Remote pane */}
 				<Box flexDirection="column" width="50%" borderStyle="single" borderColor="gray" paddingX={1}>
-					<Text bold color={activePane === 'remote' ? 'cyan' : 'gray'}>
+					<Text bold color={activePane === 'remote' ? 'magenta' : 'gray'}>
 						{activePane === 'remote' ? '▶ ' : '  '}Remote: {remotePath}
 						{searchQuery && activePane === 'remote' && <Text dimColor> (filtered: {getFilteredRemoteFiles.length}/{remoteFiles.length})</Text>}
 					</Text>

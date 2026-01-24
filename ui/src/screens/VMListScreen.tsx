@@ -118,7 +118,7 @@ export default function VMListScreen({ selectedVM, onSelectVM, isActive, onVMDel
 		<Box flexDirection="column" padding={1}>
 			{/* Header */}
 			<Box marginBottom={1}>
-				<Text bold color="cyan">
+				<Text bold color="magenta">
 					VMs ({vms.length})
 				</Text>
 			</Box>
