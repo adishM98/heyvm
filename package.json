@@ -1,6 +1,6 @@
 {
   "name": "heyvm",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A zero-config, interactive terminal UI to connect, manage, and transfer files to VMs over SSH",
   "type": "module",
   "bin": {
