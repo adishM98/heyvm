@@ -295,12 +295,13 @@ const FilesTab = React.memo(
 		);
 	};
 
-	const renderFileList = (files: FileInfo[], selectedIndex: number, scrollOffset: number, isActive: boolean) => {
+	const renderFileList = (files: FileInfo[], selectedIndex: number, scrollOffset: number, isActive: boolean, pane: Pane) => {
 		const visibleFiles = files.slice(scrollOffset, scrollOffset + maxVisibleFiles);
 		const hasMoreAbove = scrollOffset > 0;
 		const hasMoreBelow = scrollOffset + maxVisibleFiles < files.length;
 		const filesAbove = scrollOffset;
 		const filesBelow = files.length - (scrollOffset + maxVisibleFiles);
+		const selectionColor = pane === 'local' ? 'magenta' : 'cyan';
 
 		return (
 			<>
@@ -318,9 +319,9 @@ const FilesTab = React.memo(
 					return (
 						<Box key={`${file.name}-${file.modTime}`}>
 							<Text>
-							<Text bold color={isSelected ? 'magenta' : undefined}>{isSelected ? '▶ ' : '  '}</Text>
+							<Text bold color={isSelected ? selectionColor : undefined}>{isSelected ? '▶ ' : '  '}</Text>
 							{file.isDir ? '📁' : '📄'}{' '}
-							<Text bold={isSelected} color={isSelected ? 'magenta' : undefined}>{file.name}</Text>
+							<Text bold={isSelected} color={isSelected ? selectionColor : undefined}>{file.name}</Text>
 								{'  '}
 								<Text dimColor>{formatFileSize(file.size)}</Text>
 							</Text>
@@ -384,24 +385,24 @@ const FilesTab = React.memo(
 			<Box flexGrow={1}>
 				{/* Local pane */}
 				<Box flexDirection="column" width="50%" borderStyle="single" borderColor="gray" paddingX={1}>
-					<Text bold color={activePane === 'local' ? 'magenta' : 'gray'}>
+					<Text bold color={activePane === 'local' ? 'magenta' : 'magenta'}>
 						{activePane === 'local' ? '▶ ' : '  '}Local: {localPath}
 						{searchQuery && activePane === 'local' && <Text dimColor> (filtered: {getFilteredLocalFiles.length}/{localFiles.length})</Text>}
 					</Text>
 					<Box flexDirection="column" marginTop={1}>
-						{renderFileList(getFilteredLocalFiles, localState.selectedIndex, localState.scrollOffset, activePane === 'local')}
+						{renderFileList(getFilteredLocalFiles, localState.selectedIndex, localState.scrollOffset, activePane === 'local', 'local')}
 					</Box>
 				</Box>
 
 				{/* Remote pane */}
 				<Box flexDirection="column" width="50%" borderStyle="single" borderColor="gray" paddingX={1}>
-					<Text bold color={activePane === 'remote' ? 'magenta' : 'gray'}>
+					<Text bold color={activePane === 'remote' ? 'cyan' : 'cyan'}>
 						{activePane === 'remote' ? '▶ ' : '  '}Remote: {remotePath}
 						{searchQuery && activePane === 'remote' && <Text dimColor> (filtered: {getFilteredRemoteFiles.length}/{remoteFiles.length})</Text>}
 					</Text>
 					{vm.status === 'connected' ? (
 						<Box flexDirection="column" marginTop={1}>
-							{renderFileList(getFilteredRemoteFiles, remoteState.selectedIndex, remoteState.scrollOffset, activePane === 'remote')}
+							{renderFileList(getFilteredRemoteFiles, remoteState.selectedIndex, remoteState.scrollOffset, activePane === 'remote', 'remote')}
 						</Box>
 					) : (
 						<Box marginTop={1}>
