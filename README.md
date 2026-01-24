@@ -603,6 +603,17 @@ If you encounter issues:
 - 🔄 Multi-VM command execution
 - 🔄 SSH config import
 
+## Project Maturity
+
+heyvm is still in its early stages. While it solves real problems and is actively used, it hasn't been battle-tested across every edge case or environment.
+
+If you encounter issues or have ideas for improvements:
+- **Found a bug?** [Open an issue](https://github.com/adishm/heyvm/issues) - detailed bug reports help immensely
+- **Want a feature?** [Request it](https://github.com/adishm/heyvm/issues) - I'd love to hear how heyvm can better fit your workflow
+- **Want to customize it?** Fork the repository and make it your own! Add features, change behaviors, experiment freely
+
+The beauty of open source is that you don't have to wait. If you need something now, fork it, build it, and if you think others might benefit, send a PR back. The project welcomes contributions of all kinds.
+
 ## Contributing
 
 Contributions are welcome! Here's how you can help:
