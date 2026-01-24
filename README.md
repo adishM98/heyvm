@@ -66,7 +66,7 @@ These components communicate via **JSON-RPC over stdio**, providing process isol
 Install heyvm globally via npm:
 
 ```bash
-npm install -g heyvm
+npm install -g heyvm@latest
 ```
 
 Then run from anywhere:
