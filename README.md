@@ -88,10 +88,93 @@ The UI will start in your terminal, and the Go backend will run as a background 
 
 ### Interface Layout
 
-heyvm uses a **split-pane interface**:
+heyvm uses a **split-pane interface** with three main screens:
 
-- **Left Pane**: VM list (always visible)
-- **Right Pane**: Selected VM details with multiple tabs (Overview, Terminal, Files)
+#### 1. VM List & Overview Screen
+
+```
+┌─────────────────────────────┐┌────────────────────────────────────────────────────────┐
+│                             ││                                                        │
+│ VMs (3)                     ││ ▶ Overview    Terminal    Files                        │
+│                             ││                                                        │
+│ ▶ ● production-web          ││   VM: production-web                                   │
+│   ubuntu@192.168.1.100      ││   Status: ● Connected                                  │
+│                             ││   Host: 192.168.1.100:22                               │
+│ ○ staging-api               ││   User: ubuntu                                         │
+│   admin@10.0.0.50           ││   Auth: SSH Key (~/.ssh/id_rsa)                        │
+│                             ││                                                        │
+│ ○ dev-database              ││   Last Connected: 2 minutes ago                        │
+│   root@172.16.0.10          ││                                                        │
+│                             ││   Actions:                                             │
+│ ● connected   ○             ││   [c] Connect    [x] Disconnect    [t] Test            │
+│ disconnected   ◐ connecting ││                                                        │
+│                             ││   System Info:                                         │
+│ ┌─────────────────────────┐ ││   Loading...                                           │
+│ │ j/k navigate •  Enter   │ ││                                                        │
+│ │ select •  a add •  d    │ ││                                                        │
+│ │ delete •  r refresh     │ ││                                                        │
+│ └─────────────────────────┘ ││                                                        │
+│                             ││                                                        │
+└─────────────────────────────┘└────────────────────────────────────────────────────────┘
+    [Esc] VM List • [1] Overview • [2] Terminal • [3] Files • [q] Quit
+```
+
+#### 2. Terminal Tab (Full SSH Terminal)
+
+```
+┌─────────────────────────────┐┌────────────────────────────────────────────────────────┐
+│                             ││                                                        │
+│ VMs (3)                     ││   Overview  ▶ Terminal    Files                        │
+│                             ││                                                        │
+│ ▶ ● production-web          ││ ubuntu@production-web:~$ htop                          │
+│   ubuntu@192.168.1.100      ││                                                        │
+│                             ││   1  [||||||||||||||||100.0%]   Tasks: 89, 147 thr     │
+│ ○ staging-api               ││   2  [||||||||||      45.3%]    Load average: 0.52     │
+│   admin@10.0.0.50           ││   Mem[|||||||||||||2.1G/4.0G]   Uptime: 14 days        │
+│                             ││   Swp[               0K/2.0G]                          │
+│ ○ dev-database              ││                                                        │
+│   root@172.16.0.10          ││   PID USER   PRI  NI  VIRT   RES   SHR S CPU% MEM%     │
+│                             ││  1234 ubuntu  20   0  123M  45M  12M S  5.2  1.1       │
+│ ● connected   ○             ││  5678 ubuntu  20   0  456M  89M  23M R 15.7  2.2       │
+│ disconnected   ◐ connecting ││  9012 root    20   0 1024M 234M  34M S  0.0  5.8       │
+│                             ││                                                        │
+│                             ││ ubuntu@production-web:~$ vim /etc/nginx/nginx.conf     │
+│                             ││                                                        │
+│                             ││ Full terminal emulator - vim, nano, htop all work!     │
+│                             ││ Scroll history: PgUp/PgDn or Shift+↑/↓ (1000 lines)    │
+└─────────────────────────────┘└────────────────────────────────────────────────────────┘
+    [Ctrl+O] Overview • [Esc] VM List • Interactive terminal (all keys work)
+```
+
+#### 3. Files Tab (Dual-Pane File Browser with Progress)
+
+```
+┌──────────────────────────────┐ ┌──────────────────────────────────────────────────────────┐
+│                              │ │                                                          │
+│  VMs (3)                     │ │   Overview   Terminal ▶ Files                            │
+│                              │ │                                                          │
+│  ▶ ● production-web          │ │   ┌─ ↑ Uploading: application.tar.gz ──────────────────┐ │
+│    ubuntu@192.168.1.100      │ │   │ ████████████████████████████░░░░░░░░░  68.4%       │ │
+│                              │ │   │ 137.2M / 200.5M                                    │ │
+│  ○ staging-api               │ │   └────────────────────────────────────────────────────┘ │
+│    admin@10.0.0.50           │ │                                                          │
+│                              │ │   ┌──────────────────────────┬────────────────────────┐  │
+│  ○ dev-database              │ │   │ ▶ Local:  ~/projects/app │ Remote: /var/www/app   │  │
+│    root@172.16.0.10          │ │   ├──────────────────────────┼────────────────────────┤  │
+│                              │ │   │ 📁 ..                     │ 📁 ..                  │ │
+│  ● connected                 │ │   │ 📁 src            45K     │ 📁 public        12K   │ │
+│  ○ disconnected              │ │   │ 📁 dist           3.2M    │ 📁 logs         456K   │ │
+│  ◐ connecting                │ │   │ ▶ 📄 package.json 2.3K    │ 📄 app.js         89K  │ │
+│                              │ │   │   📄 tsconfig.json 1.1K   │ 📄 config.yml     1.2K │ │
+│                              │ │   │   📄 README.md      8.9K  │ 📁 node_modules        │ │
+│                              │ │   │   📄 .gitignore     456B  │ 📄 .env           512B │ │
+│                              │ │   │                          │                        │ │
+│                              │ │   └──────────────────────────┴────────────────────────┘ │
+└──────────────────────────────┘ └─────────────────────────────────────────────────────────┘
+
+[Tab] Switch pane • [j/k] Navigate • [Enter] Open • [p] Push • [g] Get • [/] Search
+
+```
 
 Navigate between panes using keyboard shortcuts to efficiently manage your VMs.
 
