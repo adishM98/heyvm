@@ -654,7 +654,6 @@ Built with:
 
 - **Issues**: [GitHub Issues](https://github.com/adishm/heyvm/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/adishm/heyvm/discussions)
-- **Documentation**: [docs/](docs/)
 
 ---
 
