@@ -1,5 +1,8 @@
 # heyvm
 
+[![npm version](https://img.shields.io/npm/v/heyvm.svg)](https://www.npmjs.com/package/heyvm)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 > A zero-config, interactive terminal UI to connect, manage, and transfer files to VMs over SSH
 
 ## Overview
