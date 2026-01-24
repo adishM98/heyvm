@@ -1,0 +1,57 @@
+{
+  "name": "heyvm",
+  "version": "0.1.0",
+  "description": "A zero-config, interactive terminal UI to connect, manage, and transfer files to VMs over SSH",
+  "type": "module",
+  "bin": {
+    "heyvm": "./bin/heyvm.js"
+  },
+  "scripts": {
+    "postinstall": "node scripts/install.js",
+    "prepublishOnly": "npm run build",
+    "build": "npm run build:ui",
+    "build:ui": "cd ui && npm install && npm run build",
+    "dev": "make dev",
+    "test": "make test"
+  },
+  "keywords": [
+    "ssh",
+    "vm",
+    "terminal",
+    "tui",
+    "cli",
+    "sftp",
+    "file-transfer",
+    "remote-management",
+    "devops",
+    "server-management"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/adishm/heyvm.git"
+  },
+  "bugs": {
+    "url": "https://github.com/adishm/heyvm/issues"
+  },
+  "homepage": "https://github.com/adishm/heyvm#readme",
+  "author": "Adish M",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "bin/",
+    "ui/dist/",
+    "ui/scripts/",
+    "ui/package.json",
+    "core/",
+    "scripts/",
+    "LICENSE",
+    "README.md"
+  ],
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ]
+}

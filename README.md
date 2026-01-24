@@ -58,7 +58,23 @@ These components communicate via **JSON-RPC over stdio**, providing process isol
 - **Go** >= 1.21
 - SSH access to at least one VM (for testing)
 
-### Installation
+### Installation (Global - Recommended)
+
+Install heyvm globally via npm:
+
+```bash
+npm install -g heyvm
+```
+
+Then run from anywhere:
+
+```bash
+heyvm
+```
+
+### Installation (From Source)
+
+For development or contributing:
 
 ```bash
 # Clone the repository
@@ -75,10 +91,13 @@ make build-all
 ### Running heyvm
 
 ```bash
-# Development mode (with hot reload)
+# If installed globally
+heyvm
+
+# From source - development mode (with hot reload)
 make dev
 
-# Or run the production build
+# From source - production build
 make run
 ```
 

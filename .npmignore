@@ -1,0 +1,30 @@
+# Don't publish these to npm
+.git/
+.github/
+.claude/
+node_modules/
+*.log
+
+# Development files
+.gitignore
+.eslintrc*
+.prettierrc*
+tsconfig.tsbuildinfo
+
+# Documentation (keep README.md)
+docs/
+
+# Build artifacts that will be rebuilt
+ui/node_modules/
+ui/dist/*.map
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
