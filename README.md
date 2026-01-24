@@ -1,9 +1,9 @@
 # heyvm
 
 [![npm version](https://img.shields.io/npm/v/heyvm.svg)](https://www.npmjs.com/package/heyvm)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
-> A zero-config, interactive terminal UI to connect, manage, and transfer files to VMs over SSH
+A zero-config, interactive terminal UI to connect, manage, and transfer files to VMs over SSH
 
 ## Overview
 
@@ -105,6 +105,46 @@ make run
 ```
 
 The UI will start in your terminal, and the Go backend will run as a background process communicating via stdio.
+
+### Uninstalling heyvm
+
+To completely remove heyvm from your system:
+
+**1. Uninstall the package**
+
+If installed globally via npm:
+```bash
+npm uninstall -g heyvm
+```
+
+If installed from source:
+```bash
+# Simply delete the cloned repository
+rm -rf /path/to/heyvm
+```
+
+**2. Remove configuration and data**
+
+```bash
+# Remove all heyvm configuration, state, and logs
+rm -rf ~/.heyvm
+```
+
+This removes:
+- VM definitions (`config.yaml`)
+- Runtime state (`state.json`)
+- SSH known hosts (`known_hosts`)
+- Application logs (`logs/`)
+
+**3. Remove stored passwords (optional)**
+
+Passwords stored in the OS keychain need to be removed manually:
+
+- **macOS**: Open "Keychain Access" app → Search for "heyvm" → Delete entries
+- **Linux**: Use your keyring manager (GNOME Keyring, KWallet, etc.)
+- **Windows**: Open "Credential Manager" → Search for "heyvm" → Remove entries
+
+**Note**: SSH keys are never copied or stored by heyvm, so no additional cleanup is needed for key-based authentication.
 
 ## Usage
 
