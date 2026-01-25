@@ -583,16 +583,6 @@ If you encounter issues:
 
 ## Roadmap
 
-### Current Features (Phase 1)
-- ✅ VM management and storage
-- ✅ SSH key and password authentication
-- ✅ Split-pane TUI interface
-- ✅ Full terminal emulator (xterm.js with ANSI/VT100 support)
-- ✅ Terminal scrollback (1000 lines)
-- ✅ Interactive programs support (vim, nano, htop, sudo)
-- ✅ File browser with dual-pane view
-- ✅ Secure credential storage
-
 ### Planned Features (Future Phases)
 - 🔄 Cloud provider integration (AWS, Azure, GCP)
 - 🔄 Bastion/jump host support
