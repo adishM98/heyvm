@@ -106,6 +106,39 @@ make run
 
 The UI will start in your terminal, and the Go backend will run as a background process communicating via stdio.
 
+### Updating to Latest Version
+
+**If installed globally via npm:**
+
+```bash
+npm update -g heyvm
+```
+
+Or reinstall with the latest version:
+
+```bash
+npm install -g heyvm@latest
+```
+
+**If installed from source:**
+
+```bash
+# Navigate to the heyvm directory
+cd /path/to/heyvm
+
+# Pull latest changes
+git pull origin main
+
+# Reinstall dependencies and rebuild
+make install
+make build-all
+```
+
+Check your current version:
+```bash
+npm list -g heyvm
+```
+
 ### Uninstalling heyvm
 
 To completely remove heyvm from your system:
