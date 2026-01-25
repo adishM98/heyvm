@@ -81,7 +81,7 @@ For development or contributing:
 
 ```bash
 # Clone the repository
-git clone https://github.com/adishm/heyvm.git
+git clone https://github.com/adishM98/heyvm.git
 cd heyvm
 
 # Install dependencies for both UI and Core backend
