@@ -653,8 +653,8 @@ Built with:
 
 ## Support & Community
 
-- **Issues**: [GitHub Issues](https://github.com/adishm/heyvm/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/adishm/heyvm/discussions)
+- **Issues**: [GitHub Issues](https://github.com/adishM98/heyvm/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/adishM98/heyvm/discussions)
 
 ---
 
