@@ -45,7 +45,7 @@ export default React.memo(function VMDetailScreen({ vm, activeTab, onTabChange, 
 			case 'files':
 				return (
 					<Text dimColor>
-						<Text bold>j/k</Text> navigate • <Text bold>Tab</Text> pane • <Text bold>p</Text> push • <Text bold>g</Text> get • <Text bold>/</Text> search • <Text bold>Esc</Text> back
+						<Text bold>j/k</Text> navigate • <Text bold>Tab</Text> pane • <Text bold>p</Text> push • <Text bold>g</Text> get • <Text bold>/</Text> search • <Text bold>r</Text> refresh • <Text bold>Esc</Text> back
 					</Text>
 				);
 			default:
@@ -99,9 +99,13 @@ export default React.memo(function VMDetailScreen({ vm, activeTab, onTabChange, 
 
 			{/* Tab content */}
 			<Box flexGrow={1} flexDirection="column">
-				{activeTab === 'overview' && <OverviewTab vm={vm} isActive={isActive} onVMUpdated={onVMUpdated} />}
-				{activeTab === 'terminal' && <TerminalTab vm={vm} isActive={isActive} />}
-				{activeTab === 'files' && <FilesTab vm={vm} isActive={isActive} />}
+				{activeTab === 'overview' ? (
+					<OverviewTab vm={vm} isActive={isActive} onVMUpdated={onVMUpdated} />
+				) : activeTab === 'terminal' ? (
+					<TerminalTab vm={vm} isActive={isActive} />
+				) : (
+					<FilesTab vm={vm} isActive={isActive} />
+				)}
 			</Box>
 
 			{/* Context-sensitive help bar */}
@@ -109,5 +113,14 @@ export default React.memo(function VMDetailScreen({ vm, activeTab, onTabChange, 
 				{getContextHelp()}
 			</Box>
 		</Box>
+	);
+}, (prevProps, nextProps) => {
+	// Only re-render if these critical props change
+	return (
+		prevProps.activeTab === nextProps.activeTab &&
+		prevProps.isActive === nextProps.isActive &&
+		prevProps.vm.id === nextProps.vm.id &&
+		prevProps.vm.status === nextProps.vm.status &&
+		prevProps.vm.name === nextProps.vm.name
 	);
 });

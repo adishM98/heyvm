@@ -343,8 +343,7 @@ heyvm/
 ├── core/                     # Backend - Go
 │   ├── cmd/
 │   │   ├── heyvm-core/       # Main backend entry point
-│   │   ├── heyvm/            # CLI wrapper
-│   │   └── file-browser/     # Standalone file browser
+│   │   └── heyvm/            # CLI wrapper
 │   ├── internal/
 │   │   ├── auth/             # Authentication providers
 │   │   │   ├── provider.go
@@ -363,11 +362,10 @@ heyvm/
 │   │   │   ├── manager.go
 │   │   │   ├── session.go
 │   │   │   └── errors.go
-│   │   ├── vm/               # VM models and registry
-│   │   │   ├── registry.go
-│   │   │   ├── models.go
-│   │   │   └── errors.go
-│   │   └── tui/              # Terminal UI utilities
+│   │   └── vm/               # VM models and registry
+│   │       ├── registry.go
+│   │       ├── models.go
+│   │       └── errors.go
 │   └── go.mod
 ├── docs/                     # Documentation
 │   ├── PRD.md                # Product requirements
@@ -375,9 +373,7 @@ heyvm/
 │   ├── development.md        # Development guide
 │   └── exploration/          # Development notes
 ├── bin/                      # Compiled binaries (generated)
-│   ├── heyvm-core
-│   ├── heyvm
-│   └── file-browser
+│   └── heyvm-core
 ├── build/                    # Build artifacts (generated)
 ├── Makefile                  # Build automation
 ├── README.md                 # This file

@@ -17,8 +17,11 @@ require (
 	github.com/dvsekhvalnov/jose2go v1.5.0 // indirect
 	github.com/godbus/dbus v0.0.0-20190726142602-4481cbc300e2 // indirect
 	github.com/gsterjov/go-libsecret v0.0.0-20161001094733-a6f4afe4910c // indirect
+	github.com/jesseduffield/gocui v0.3.0 // indirect
 	github.com/kr/fs v0.1.0 // indirect
+	github.com/mattn/go-runewidth v0.0.9 // indirect
 	github.com/mtibben/percent v0.2.1 // indirect
+	github.com/nsf/termbox-go v1.1.1 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	golang.org/x/sys v0.40.0 // indirect
 	golang.org/x/term v0.39.0 // indirect

@@ -7,8 +7,8 @@ help:
 	@echo "  install     - Install dependencies (UI + Core)"
 	@echo "  build-ui    - Build UI (TypeScript/Ink)"
 	@echo "  build-core  - Build Core backend (Go)"
-	@echo "  build-all   - Build both UI and Core"
-	@echo "  dev         - Run in development mode (UI + Core)"
+	@echo "  build-all   - Build all components"
+	@echo "  dev         - Run in development mode"
 	@echo "  test        - Run tests"
 	@echo "  clean       - Clean build artifacts"
 	@echo "  help        - Show this help message"
@@ -39,7 +39,7 @@ dev:
 	@make build-core
 	@echo "Building UI..."
 	cd ui && npm run build
-	@echo "Starting integrated app (UI + Core backend)..."
+	@echo "Starting integrated app..."
 	cd ui && npm run dev:with-core
 
 test:
