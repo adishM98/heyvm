@@ -142,7 +142,6 @@ Passwords stored in the OS keychain need to be removed manually:
 
 - **macOS**: Open "Keychain Access" app → Search for "heyvm" → Delete entries
 - **Linux**: Use your keyring manager (GNOME Keyring, KWallet, etc.)
-- **Windows**: Open "Credential Manager" → Search for "heyvm" → Remove entries
 
 **Note**: SSH keys are never copied or stored by heyvm, so no additional cleanup is needed for key-based authentication.
 
