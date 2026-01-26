@@ -5,6 +5,11 @@
 
 A zero-config, interactive terminal UI to connect, manage, and transfer files to VMs over SSH
 
+
+![My Movie GIF from ezgif](https://github.com/user-attachments/assets/ac594f40-7591-4668-951f-6722bf61d2bf)
+
+
+
 ## Overview
 
 **heyvm** is a lazygit-style TUI (Terminal User Interface) for managing VMs via SSH. It eliminates the need to remember SSH/SCP syntax, manually track IPs and credentials, or juggle multiple tools for terminal access and file transfer.
