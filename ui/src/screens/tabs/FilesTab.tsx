@@ -9,11 +9,12 @@ import { parseMouseEvent } from '../../utils/mouseParser.js';
 interface FilesTabProps {
 	vm: VM;
 	isActive: boolean;
+	headerOffset: number; // Y offset from top of terminal to start of file list content
 }
 
 const VISIBLE_FILES = 15;
 
-export default function FilesTab({ vm, isActive }: FilesTabProps) {
+export default function FilesTab({ vm, isActive, headerOffset }: FilesTabProps) {
 	const [activePane, setActivePane] = useState<'local' | 'remote'>('local');
 	const [localPath, setLocalPath] = useState(process.env.HOME || '/');
 	const [remotePath, setRemotePath] = useState('/');
@@ -199,11 +200,8 @@ export default function FilesTab({ vm, isActive }: FilesTabProps) {
 		};
 
 		// Calculate layout metrics
-		// HEADER_OFFSET accounts for: VM list panel + VM header + tabs + borders above the Files tab
-		// Layout: VM panel header + VM entry + status line + help text + VM header + tab bar
-		// WARNING: This is layout-dependent and may need adjustment if UI structure changes
-		// Can be overridden with HEYVM_MOUSE_OFFSET environment variable
-		const HEADER_OFFSET = parseInt(process.env.HEYVM_MOUSE_OFFSET || '23', 10);
+		// Use headerOffset prop from parent component (accounts for VMDetailScreen's header, tabs, etc.)
+		// Plus FilesTab's own pane header and border
 		const PANE_HEADER = 1;
 		const BORDER_WIDTH = 1;
 
@@ -226,7 +224,7 @@ export default function FilesTab({ vm, isActive }: FilesTabProps) {
 		}
 
 		// Calculate file list Y bounds
-		const fileListTop = HEADER_OFFSET + PANE_HEADER + BORDER_WIDTH;
+		const fileListTop = headerOffset + PANE_HEADER + BORDER_WIDTH;
 		const fileListBottom = fileListTop + VISIBLE_FILES;
 
 		// Check if click is within file list area
@@ -245,7 +243,7 @@ export default function FilesTab({ vm, isActive }: FilesTabProps) {
 		result.isValid = result.fileIndex >= 0 && result.fileIndex < files.length;
 
 		return result;
-	}, [localFiles, remoteFiles, localScroll, remoteScroll]);
+	}, [localFiles, remoteFiles, localScroll, remoteScroll, headerOffset]);
 
 	const detectClickType = useCallback((
 		currentClick: { time: number; x: number; y: number; button: number }

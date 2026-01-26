@@ -33,7 +33,7 @@ export default function App() {
 			// Trigger VM list refresh
 			setVMListVersion(v => v + 1);
 		} catch (err) {
-			console.error('Failed to refresh VM:', err);
+			// Error handled silently
 		}
 	}, [selectedVM]);
 
@@ -48,28 +48,23 @@ export default function App() {
 	const handleAddVMSubmit = async (vm: Partial<VM>, password?: string) => {
 		try {
 			const newVM = await ipcClient.addVM(vm);
-			console.log('[App] VM added successfully:', newVM.id);
-			
+
 			// Store password in keychain after VM is added (now we have ID)
 			if (password && newVM.id) {
-				console.log('[App] Storing password for VM:', newVM.id);
 				try {
 					await ipcClient.storePassword(newVM.id, password);
-					console.log('[App] Password stored successfully');
 				} catch (passErr) {
-					console.error('[App] Failed to store password:', passErr);
 					// Show error to user but don't fail VM creation
 					// Password can be re-entered later
 				}
 			}
-			
+
 			setShowAddVMModal(false);
 			setSelectedVM(newVM);
 			setActivePaneSide('right');
 			setActiveTab('overview');
 			// No auto-connect - user must explicitly connect via 'c' key
 		} catch (err) {
-			console.error('Failed to add VM:', err);
 			// Error is handled in AddVMScreen, this is just a fallback
 		}
 	};
