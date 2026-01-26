@@ -173,19 +173,20 @@ export default function FilesTab({ vm, isActive }: FilesTabProps) {
 		const PANE_HEADER = 1;
 		const BORDER_WIDTH = 1;
 
-		const leftPadding = 2;
-		const paneWidth = Math.floor((terminalWidth - leftPadding * 2) / 2);
-		const localPaneStart = leftPadding + BORDER_WIDTH;
-		const localPaneEnd = localPaneStart + paneWidth - BORDER_WIDTH;
-		const remotePaneStart = localPaneEnd + BORDER_WIDTH;
+		// VM list panel takes up ~25% of terminal width on the left
+		// Files tab starts after VM list panel
+		const vmListWidth = Math.floor(terminalWidth * 0.25);
+		const filesTabStart = vmListWidth;
+		const filesTabWidth = terminalWidth - vmListWidth;
+
+		// Midpoint between the two file panes (within the Files tab area)
+		const filesPaneMidpoint = filesTabStart + Math.floor(filesTabWidth / 2);
 
 		// Determine pane from X coordinate
-		if (mouseX >= localPaneStart && mouseX < localPaneEnd) {
+		if (mouseX < filesPaneMidpoint) {
 			result.pane = 'local';
-		} else if (mouseX >= remotePaneStart) {
-			result.pane = 'remote';
 		} else {
-			return result; // Clicked on border or outside
+			result.pane = 'remote';
 		}
 
 		// Calculate file list Y bounds
@@ -343,6 +344,15 @@ export default function FilesTab({ vm, isActive }: FilesTabProps) {
 			mouseEvent.y,
 			termWidth
 		);
+
+		// Debug logging
+		if (process.env.DEBUG_MOUSE) {
+			const vmListWidth = Math.floor(termWidth * 0.25);
+			const filesTabStart = vmListWidth;
+			const filesTabWidth = termWidth - vmListWidth;
+			const filesPaneMidpoint = filesTabStart + Math.floor(filesTabWidth / 2);
+			console.error(`[HOVER] x=${mouseEvent.x}, termWidth=${termWidth}, vmList=${vmListWidth}, filesStart=${filesTabStart}, filesMidpoint=${filesPaneMidpoint}, pane=${target.pane}`);
+		}
 
 		// Update hover state
 		if (target.isValid && target.pane) {
