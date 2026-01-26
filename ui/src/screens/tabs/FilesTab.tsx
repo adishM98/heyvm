@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { VM, FileInfo } from '../../core/types.js';
 import { ipcClient } from '../../core/ipc.js';
+import { parseMouseEvent } from '../../utils/mouseParser.js';
 
 interface FilesTabProps {
 	vm: VM;
@@ -70,13 +71,67 @@ export default function FilesTab({ vm, isActive }: FilesTabProps) {
 	// Load remote files
 	const loadRemoteFiles = useCallback(() => {
 		if (vm.status !== 'connected') return;
-		
+
 		ipcClient.listFiles(vm.id, remotePath).then((files) => {
 			setRemoteFiles(files);
 		}).catch((err) => {
 			setError(`Failed to list remote ${remotePath}: ${err.message}`);
 		});
 	}, [vm.id, vm.status, remotePath]);
+
+	// Throttled navigation
+	const canNavigate = useCallback(() => {
+		const now = Date.now();
+		if (now - navigationThrottle.current < 30) return false;
+		navigationThrottle.current = now;
+		return true;
+	}, []);
+
+	// Scroll up handler for mouse wheel
+	const handleScrollUp = useCallback(() => {
+		if (!canNavigate()) return;
+
+		const files = activePane === 'local' ? localFiles : remoteFiles;
+		const index = activePane === 'local' ? localIndex : remoteIndex;
+		const scroll = activePane === 'local' ? localScroll : remoteScroll;
+
+		const newIndex = Math.max(index - 1, 0);
+
+		if (activePane === 'local') {
+			setLocalIndex(newIndex);
+			if (newIndex < scroll) {
+				setLocalScroll(Math.max(scroll - 1, 0));
+			}
+		} else {
+			setRemoteIndex(newIndex);
+			if (newIndex < scroll) {
+				setRemoteScroll(Math.max(scroll - 1, 0));
+			}
+		}
+	}, [activePane, localFiles, remoteFiles, localIndex, remoteIndex, localScroll, remoteScroll, canNavigate]);
+
+	// Scroll down handler for mouse wheel
+	const handleScrollDown = useCallback(() => {
+		if (!canNavigate()) return;
+
+		const files = activePane === 'local' ? localFiles : remoteFiles;
+		const index = activePane === 'local' ? localIndex : remoteIndex;
+		const scroll = activePane === 'local' ? localScroll : remoteScroll;
+
+		const newIndex = Math.min(index + 1, files.length - 1);
+
+		if (activePane === 'local') {
+			setLocalIndex(newIndex);
+			if (newIndex >= scroll + VISIBLE_FILES) {
+				setLocalScroll(scroll + 1);
+			}
+		} else {
+			setRemoteIndex(newIndex);
+			if (newIndex >= scroll + VISIBLE_FILES) {
+				setRemoteScroll(scroll + 1);
+			}
+		}
+	}, [activePane, localFiles, remoteFiles, localIndex, remoteIndex, localScroll, remoteScroll, canNavigate]);
 
 	useEffect(() => {
 		if (!isActive) return;
@@ -110,13 +165,46 @@ export default function FilesTab({ vm, isActive }: FilesTabProps) {
 		};
 	}, [vm.id]);
 
-	// Throttled navigation
-	const canNavigate = useCallback(() => {
-		const now = Date.now();
-		if (now - navigationThrottle.current < 30) return false;
-		navigationThrottle.current = now;
-		return true;
-	}, []);
+	// Enable SGR mouse tracking when tab is active
+	useEffect(() => {
+		if (!isActive) return;
+
+		// Enable SGR extended mouse tracking
+		process.stdout.write('\x1b[?1000h'); // Basic mouse tracking
+		process.stdout.write('\x1b[?1006h'); // SGR extended format
+
+		return () => {
+			// Disable on cleanup
+			process.stdout.write('\x1b[?1006l');
+			process.stdout.write('\x1b[?1000l');
+		};
+	}, [isActive]);
+
+	// Listen for mouse scroll events on stdin
+	useEffect(() => {
+		if (!isActive) return;
+
+		const handleData = (data: Buffer) => {
+			const mouseEvent = parseMouseEvent(data);
+
+			if (!mouseEvent) return; // Not a mouse event
+
+			// Only handle scroll wheel events
+			if (mouseEvent.button === 64) {
+				// Scroll up - move selection up by 1
+				handleScrollUp();
+			} else if (mouseEvent.button === 65) {
+				// Scroll down - move selection down by 1
+				handleScrollDown();
+			}
+		};
+
+		process.stdin.on('data', handleData);
+
+		return () => {
+			process.stdin.off('data', handleData);
+		};
+	}, [isActive, handleScrollUp, handleScrollDown]);
 
 	useInput((input, key) => {
 		if (!isActive) return;
@@ -298,20 +386,62 @@ export default function FilesTab({ vm, isActive }: FilesTabProps) {
 	const renderFileList = (files: FileInfo[], selectedIndex: number, scrollOffset: number, pane: 'local' | 'remote') => {
 		const visible = files.slice(scrollOffset, scrollOffset + VISIBLE_FILES);
 		const isActivPane = activePane === pane;
-		
+
 		return visible.map((file, i) => {
 			const actualIndex = scrollOffset + i;
 			const isSelected = actualIndex === selectedIndex && isActivPane;
 			const icon = file.isDir ? '📁' : '📄';
 			const prefix = isSelected ? '▶ ' : '  ';
 			const color = isSelected ? (pane === 'local' ? 'magenta' : 'cyan') : undefined;
-			
+
 			return (
 				<Text key={actualIndex} bold={isSelected} color={color}>
 					{prefix}{icon} {file.name}
 				</Text>
 			);
 		});
+	};
+
+	const renderScrollbar = (
+		scrollOffset: number,
+		totalFiles: number,
+		visibleFiles: number,
+		isActive: boolean,
+		pane: 'local' | 'remote'
+	) => {
+		// Don't show scrollbar if all files fit in view
+		if (totalFiles <= visibleFiles) {
+			return null;
+		}
+
+		const scrollableRange = totalFiles - visibleFiles;
+
+		// Calculate thumb size (proportional to visible/total ratio)
+		const thumbHeight = Math.max(1, Math.ceil((visibleFiles / totalFiles) * visibleFiles));
+
+		// Calculate thumb position within the track
+		const maxThumbPosition = visibleFiles - thumbHeight;
+		const thumbPosition = scrollableRange > 0
+			? Math.floor((scrollOffset / scrollableRange) * maxThumbPosition)
+			: 0;
+
+		// Determine color based on active state
+		const color = isActive
+			? (pane === 'local' ? 'magenta' : 'cyan')
+			: 'gray';
+
+		// Generate scrollbar rows (one per visible file row)
+		const scrollbarRows = [];
+		for (let i = 0; i < visibleFiles; i++) {
+			const isThumb = i >= thumbPosition && i < thumbPosition + thumbHeight;
+			scrollbarRows.push(
+				<Text key={i} color={color}>
+					{isThumb ? '█' : '░'}
+				</Text>
+			);
+		}
+
+		return scrollbarRows;
 	};
 
 	const renderProgressBar = (percent: number, width: number = 30) => {
@@ -350,14 +480,28 @@ export default function FilesTab({ vm, isActive }: FilesTabProps) {
 			<Box flexDirection="row" flexGrow={1}>
 				<Box flexDirection="column" width="50%" borderStyle="single" borderColor={activePane === 'local' ? 'magenta' : 'gray'}>
 					<Text bold color="magenta">Local: {localPath}</Text>
-					<Box flexDirection="column">
-						{renderFileList(localFiles, localIndex, localScroll, 'local')}
+					<Box flexDirection="row">
+						<Box flexDirection="column" flexGrow={1}>
+							{renderFileList(localFiles, localIndex, localScroll, 'local')}
+						</Box>
+						{localFiles.length > VISIBLE_FILES && (
+							<Box flexDirection="column" width={1}>
+								{renderScrollbar(localScroll, localFiles.length, VISIBLE_FILES, activePane === 'local', 'local')}
+							</Box>
+						)}
 					</Box>
 				</Box>
 				<Box flexDirection="column" width="50%" borderStyle="single" borderColor={activePane === 'remote' ? 'cyan' : 'gray'}>
 					<Text bold color="cyan">Remote: {remotePath}</Text>
-					<Box flexDirection="column">
-						{renderFileList(remoteFiles, remoteIndex, remoteScroll, 'remote')}
+					<Box flexDirection="row">
+						<Box flexDirection="column" flexGrow={1}>
+							{renderFileList(remoteFiles, remoteIndex, remoteScroll, 'remote')}
+						</Box>
+						{remoteFiles.length > VISIBLE_FILES && (
+							<Box flexDirection="column" width={1}>
+								{renderScrollbar(remoteScroll, remoteFiles.length, VISIBLE_FILES, activePane === 'remote', 'remote')}
+							</Box>
+						)}
 					</Box>
 				</Box>
 			</Box>
