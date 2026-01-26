@@ -635,17 +635,18 @@ export default function FilesTab({ vm, isActive }: FilesTabProps) {
 			// Color priority: selected > hovered > default
 			let color = undefined;
 			let backgroundColor = undefined;
+			let inverse = false;
 			const paneColor = pane === 'local' ? 'magenta' : 'cyan';
 
 			if (isSelected) {
 				color = paneColor;
 			} else if (isHovered) {
 				color = paneColor;
-				backgroundColor = 'blackBright';
+				inverse = true;
 			}
 
 			return (
-				<Text key={actualIndex} bold={isSelected} color={color} backgroundColor={backgroundColor}>
+				<Text key={actualIndex} bold={isSelected} color={color} inverse={inverse}>
 					{prefix}{icon} {file.name}
 				</Text>
 			);
