@@ -9,11 +9,15 @@ interface TerminalTabProps {
 	isActive: boolean;
 }
 
-const TERMINAL_ROWS = 24;
-const TERMINAL_COLS = 80;
+const TERMINAL_ROWS = 24; // Fixed height to prevent flickering
 
 const TerminalTab = React.memo(
 	function TerminalTab({ vm, isActive }: TerminalTabProps) {
+	// Get actual terminal dimensions dynamically (width only)
+	const getTerminalDimensions = () => ({
+		rows: TERMINAL_ROWS, // Fixed height
+		cols: process.stdout.columns || 120, // Dynamic width
+	});
 	const [sessionId, setSessionId] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [scrollOffset, setScrollOffset] = useState(0); // 0 = bottom (live), positive = scrolled up
@@ -31,7 +35,8 @@ const TerminalTab = React.memo(
 
 	// Initialize terminal emulator
 	useEffect(() => {
-		emulatorRef.current = new TerminalEmulator(TERMINAL_ROWS, TERMINAL_COLS);
+		const dims = getTerminalDimensions();
+		emulatorRef.current = new TerminalEmulator(dims.rows, dims.cols);
 
 		return () => {
 			if (rafIdRef.current !== null) {
@@ -99,8 +104,9 @@ const TerminalTab = React.memo(
 		ipcClient.on('PTY_READY', handleReady);
 		ipcClient.on('PTY_ERROR', handleError);
 
-		// Send PTY_START message (fire-and-forget)
-		ipcClient.startPTY(vm.id, 24, 80);
+		// Send PTY_START message with actual terminal dimensions
+		const dims = getTerminalDimensions();
+		ipcClient.startPTY(vm.id, dims.rows, dims.cols);
 
 		// Cleanup only removes event listeners, does NOT close PTY
 		return () => {
@@ -109,19 +115,29 @@ const TerminalTab = React.memo(
 		};
 	}, [isActive, vm.status, vm.id]); // sessionId NOT in deps!
 
-	// Listen for PTY output events - imperative rendering
+	// Listen for PTY output events - imperative rendering with batching
 	useEffect(() => {
 		if (!sessionId) return;
 
-		const scheduleUpdate = () => {
-			if (dirtyRef.current) return; // Already scheduled
-			
-			dirtyRef.current = true;
-			rafIdRef.current = setTimeout(() => {
-				dirtyRef.current = false;
-				rafIdRef.current = null;
-				forceUpdate(); // Trigger re-render of viewport
-			}, 16); // ~60fps (16ms)
+		let writeBuffer = '';
+		let writeTimeoutId: NodeJS.Timeout | null = null;
+
+		const flushWrites = () => {
+			if (writeBuffer && emulatorRef.current) {
+				emulatorRef.current.write(writeBuffer);
+				writeBuffer = '';
+				
+				// Schedule single render update
+				if (!dirtyRef.current) {
+					dirtyRef.current = true;
+					rafIdRef.current = setTimeout(() => {
+						dirtyRef.current = false;
+						rafIdRef.current = null;
+						forceUpdate();
+					}, 16);
+				}
+			}
+			writeTimeoutId = null;
 		};
 
 		const handleOutput = ({ session_id, data }: any) => {
@@ -130,11 +146,12 @@ const TerminalTab = React.memo(
 			// Decode base64 PTY output
 			const decoded = Buffer.from(data, 'base64').toString('utf-8');
 			
-			// Feed to emulator (optimized - no updateLines() overhead)
-			if (emulatorRef.current) {
-				emulatorRef.current.write(decoded);
-				scheduleUpdate(); // Throttled re-render at ~60fps
-			}
+			// Batch writes for better performance
+			writeBuffer += decoded;
+			
+			// Debounce flush - wait for more data or 4ms max
+			if (writeTimeoutId) clearTimeout(writeTimeoutId);
+			writeTimeoutId = setTimeout(flushWrites, 4);
 		};
 
 		const handleExit = ({ session_id }: any) => {
@@ -149,6 +166,12 @@ const TerminalTab = React.memo(
 		ipcClient.on('PTY_EXIT', handleExit);
 
 		return () => {
+			// Flush any pending writes before cleanup
+			if (writeTimeoutId) {
+				clearTimeout(writeTimeoutId);
+				flushWrites();
+			}
+			
 			ipcClient.off('PTY_OUTPUT', handleOutput);
 			ipcClient.off('PTY_EXIT', handleExit);
 			if (rafIdRef.current !== null) {
@@ -163,8 +186,8 @@ const TerminalTab = React.memo(
 		if (!sessionId || !isActive) return;
 
 		const handleResize = () => {
-			const rows = process.stdout.rows || TERMINAL_ROWS;
-			const cols = process.stdout.columns || TERMINAL_COLS;
+			const dims = getTerminalDimensions();
+			const { rows, cols } = dims;
 			
 			// Resize emulator
 			if (emulatorRef.current) {
@@ -192,13 +215,14 @@ const TerminalTab = React.memo(
 		}
 	}, [vm.status, sessionId, vm.id]);
 
-	// Handle all keyboard input - optimized for vim/nano
+	// Handle all keyboard input - terminal takes COMPLETE control when active
+	// Only Ctrl+O can exit the terminal tab, everything else goes to the PTY
 	useInput((input, key) => {
 		if (!isActive || !sessionId || vm.status !== 'connected') return;
 		
-		// Ctrl+O: Exit terminal to Overview tab (let parent handle it)
+		// Ctrl+O: ONLY exit command - switch to Overview tab (let parent handle it)
 		if (key.ctrl && input === 'o') {
-			// Don't capture - let it bubble to parent
+			// Don't capture - let it bubble to parent App.tsx
 			return;
 		}
 		
@@ -235,12 +259,31 @@ const TerminalTab = React.memo(
 		// Escape key (critical for vim)
 		if (key.escape) return ipcClient.writeToPTY(vm.id, sessionId, '\x1b');
 		
-		// Ctrl+key combinations
-		if (key.ctrl && input) {
-			const char = input.toLowerCase();
-			if (char >= 'a' && char <= 'z') {
-				const code = char.charCodeAt(0) - 96; // Ctrl+A = 1, Ctrl+B = 2, etc
-				return ipcClient.writeToPTY(vm.id, sessionId, String.fromCharCode(code));
+		// Ctrl+key combinations (MUST be handled BEFORE any other input processing)
+		// These are sent to the terminal, NOT to the app (terminal is locked)
+		if (key.ctrl) {
+			// Ctrl+C: Send interrupt signal to terminal (NOT app quit!)
+			if (input === 'c') {
+				return ipcClient.writeToPTY(vm.id, sessionId, '\x03');
+			}
+			
+			// Ctrl+D: Send EOF signal
+			if (input === 'd') {
+				return ipcClient.writeToPTY(vm.id, sessionId, '\x04');
+			}
+			
+			// Ctrl+Z: Send suspend signal
+			if (input === 'z') {
+				return ipcClient.writeToPTY(vm.id, sessionId, '\x1a');
+			}
+			
+			// Other Ctrl+key combinations
+			if (input) {
+				const char = input.toLowerCase();
+				if (char >= 'a' && char <= 'z') {
+					const code = char.charCodeAt(0) - 96; // Ctrl+A = 1, Ctrl+B = 2, etc
+					return ipcClient.writeToPTY(vm.id, sessionId, String.fromCharCode(code));
+				}
 			}
 		}
 		
@@ -255,9 +298,10 @@ const TerminalTab = React.memo(
 		if (key.leftArrow) return ipcClient.writeToPTY(vm.id, sessionId, '\x1b[D');
 		if (key.rightArrow) return ipcClient.writeToPTY(vm.id, sessionId, '\x1b[C');
 		
-		// Regular characters (including numbers)
-		if (input && !key.ctrl && !key.meta) {
-			ipcClient.writeToPTY(vm.id, sessionId, input);
+		// Regular characters (including space, numbers, symbols, etc.)
+		// This handles all printable characters
+		if (input) {
+			return ipcClient.writeToPTY(vm.id, sessionId, input);
 		}
 	}, { isActive });
 
@@ -286,32 +330,36 @@ const TerminalTab = React.memo(
 					
 					{/* Terminal viewport */}
 					<Box flexDirection="column" height={TERMINAL_ROWS} overflow="hidden">
-						{emulatorRef.current.getViewport(TERMINAL_ROWS, scrollOffset).map((line, i) => {
+						{(() => {
+							// Cache cursor position and viewport for all rows (performance optimization)
 							const cursor = emulatorRef.current?.getCursorPosition();
 							const buffer = emulatorRef.current?.getTerminal().buffer.active;
 							const viewportY = buffer?.viewportY || 0;
 							const cursorRow = cursor ? cursor.y : 0;
 							const cursorCol = cursor ? cursor.x : 0;
-							// Only show cursor when at bottom (live mode)
-							const isOnThisLine = scrollOffset === 0 && (cursorRow - viewportY === i);
+							const showCursor = scrollOffset === 0 && sessionId && cursorVisible;
 							
-							if (isOnThisLine && cursorVisible && sessionId) {
-								// Render cursor
-								const beforeCursor = line.substring(0, cursorCol);
-								const atCursor = line[cursorCol] || ' ';
-								const afterCursor = line.substring(cursorCol + 1);
+							return emulatorRef.current.getViewport(TERMINAL_ROWS, scrollOffset).map((line, i) => {
+								const isOnThisLine = showCursor && (cursorRow - viewportY === i);
 								
-								return (
-									<Text key={i}>
-										{beforeCursor}
-										<Text inverse>{atCursor}</Text>
-										{afterCursor}
-									</Text>
-								);
-							}
-							
-							return <Text key={i}>{line || ' '}</Text>;
-						})}
+								if (isOnThisLine) {
+									// Render cursor - optimized string operations
+									const beforeCursor = line.substring(0, cursorCol);
+									const atCursor = line[cursorCol] || ' ';
+									const afterCursor = line.substring(cursorCol + 1);
+									
+									return (
+										<Text key={i}>
+											{beforeCursor}
+											<Text inverse>{atCursor}</Text>
+											{afterCursor}
+										</Text>
+									);
+								}
+								
+								return <Text key={i}>{line || ' '}</Text>;
+							});
+						})()}
 					</Box>
 				</Box>
 			)}
