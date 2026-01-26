@@ -199,14 +199,17 @@ export default function FilesTab({ vm, isActive }: FilesTabProps) {
 		};
 
 		// Calculate layout metrics
-		// HEADER_OFFSET accounts for: VM list panel + VM header + tabs + borders
-		const HEADER_OFFSET = 20;
+		// HEADER_OFFSET accounts for: VM list panel + VM header + tabs + borders above the Files tab
+		// Layout: VM panel header + VM entry + status line + help text + VM header + tab bar
+		// WARNING: This is layout-dependent and may need adjustment if UI structure changes
+		// Can be overridden with HEYVM_MOUSE_OFFSET environment variable
+		const HEADER_OFFSET = parseInt(process.env.HEYVM_MOUSE_OFFSET || '23', 10);
 		const PANE_HEADER = 1;
 		const BORDER_WIDTH = 1;
 
-		// VM list panel takes up ~25% of terminal width on the left
+		// VM list panel takes up ~35% of terminal width on the left
 		// Files tab starts after VM list panel
-		const vmListWidth = Math.floor(terminalWidth * 0.25);
+		const vmListWidth = Math.floor(terminalWidth * 0.35);
 		const filesTabStart = vmListWidth;
 		const filesTabWidth = terminalWidth - vmListWidth;
 
@@ -214,7 +217,9 @@ export default function FilesTab({ vm, isActive }: FilesTabProps) {
 		const filesPaneMidpoint = filesTabStart + Math.floor(filesTabWidth / 2);
 
 		// Determine pane from X coordinate
-		if (mouseX < filesPaneMidpoint) {
+		// Convert from 1-based SGR coordinates to 0-based
+		const x = mouseX - 1;
+		if (x < filesPaneMidpoint) {
 			result.pane = 'local';
 		} else {
 			result.pane = 'remote';
@@ -230,7 +235,8 @@ export default function FilesTab({ vm, isActive }: FilesTabProps) {
 		}
 
 		// Calculate file index
-		result.visualRow = mouseY - fileListTop;
+		// Convert from 1-based SGR coordinates to 0-based array indexing
+		result.visualRow = (mouseY - 1) - fileListTop;
 		const files = result.pane === 'local' ? localFiles : remoteFiles;
 		const scroll = result.pane === 'local' ? localScroll : remoteScroll;
 		result.fileIndex = scroll + result.visualRow;
