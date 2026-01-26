@@ -44,13 +44,13 @@ export class IPCClient extends EventEmitter {
 					const response = JSON.parse(line);
 					this.handleResponse(response);
 				} catch (err) {
-					console.error('[IPC] Failed to parse response:', line, err);
+					// Parse error - ignore
 				}
 			}
 		});
 
 		stdout.on('error', (err: Error) => {
-			console.error('[IPC] Stdout error:', err);
+			// Stdout error - ignore
 		});
 	}
 
@@ -67,8 +67,6 @@ export class IPCClient extends EventEmitter {
 			const pending = this.pendingRequests.get(requestId)!;
 			this.pendingRequests.delete(requestId);
 			pending.resolve(response);
-		} else {
-			console.warn('[IPC] Received response with no matching request:', response);
 		}
 	}
 
@@ -77,15 +75,12 @@ export class IPCClient extends EventEmitter {
 	 */
 	send(message: any): void {
 		if (!global.heyvmCore) {
-			console.warn('[IPC] Core process not available');
 			return;
 		}
 
 		const messageStr = JSON.stringify(message) + '\n';
 		global.heyvmCore.stdin.write(messageStr, (err) => {
-			if (err) {
-				console.error('[IPC] Failed to send message:', err);
-			}
+			// Ignore write errors
 		});
 	}
 
@@ -95,7 +90,6 @@ export class IPCClient extends EventEmitter {
 	async sendRequest<T = unknown>(request: IPCRequest): Promise<IPCResponse<T>> {
 		// If core process not available, return mock response
 		if (!global.heyvmCore) {
-			console.warn('[IPC] Core process not available, using mock response');
 			return {
 				status: 'success',
 				message: `Mock response for ${request.action}`,

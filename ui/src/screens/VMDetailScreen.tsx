@@ -16,6 +16,20 @@ interface VMDetailScreenProps {
 export default React.memo(function VMDetailScreen({ vm, activeTab, onTabChange, isActive, onVMUpdated }: VMDetailScreenProps) {
 	// Tab state is now controlled by parent (no local state or key handlers)
 
+	// Calculate header offset for mouse coordinate mapping in FilesTab
+	// With full-screen alternate buffer mode, coordinates always start at (0,0)
+	// This offset is now a simple count of UI elements above the file list:
+	// - padding(1) empty line
+	// - header line 1: "● VM_NAME  STATUS"
+	// - header line 2: "  user@host"
+	// - marginTop(1) before separator
+	// - separator line: "────────"
+	// - marginBottom(1) after header box
+	// - tabs line: "Overview | Terminal | Files"
+	// - marginBottom(1) after tabs
+	// Total: 9 lines before FilesTab content starts
+	const filesTabHeaderOffset = 9;
+
 	const getStatusColor = () => {
 		if (vm.status === 'connected') return 'green';
 		if (vm.status === 'connecting') return 'yellow';
@@ -104,7 +118,7 @@ export default React.memo(function VMDetailScreen({ vm, activeTab, onTabChange, 
 				) : activeTab === 'terminal' ? (
 					<TerminalTab vm={vm} isActive={isActive} />
 				) : (
-					<FilesTab vm={vm} isActive={isActive} />
+					<FilesTab vm={vm} isActive={isActive} headerOffset={filesTabHeaderOffset} />
 				)}
 			</Box>
 

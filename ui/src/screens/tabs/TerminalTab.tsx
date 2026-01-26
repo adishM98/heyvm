@@ -9,15 +9,16 @@ interface TerminalTabProps {
 	isActive: boolean;
 }
 
-const TERMINAL_ROWS = 24; // Fixed height to prevent flickering
+const TERMINAL_ROWS = 24; // Fixed height to prevent layout issues
 
 const TerminalTab = React.memo(
 	function TerminalTab({ vm, isActive }: TerminalTabProps) {
-	// Get actual terminal dimensions dynamically (width only)
+	// Get terminal dimensions - fixed rows, dynamic columns
 	const getTerminalDimensions = () => ({
-		rows: TERMINAL_ROWS, // Fixed height
-		cols: process.stdout.columns || 120, // Dynamic width
+		rows: TERMINAL_ROWS,
+		cols: process.stdout.columns || 120
 	});
+
 	const [sessionId, setSessionId] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [scrollOffset, setScrollOffset] = useState(0); // 0 = bottom (live), positive = scrolled up
@@ -83,20 +84,17 @@ const TerminalTab = React.memo(
 		if (vm.status !== 'connected') return;
 		if (ptyStartedRef.current) return;
 
-		console.log('[Terminal] Starting PTY session...');
 		ptyStartedRef.current = true;
 		
 		// Listen for PTY_READY event
 		const handleReady = ({ session_id, vm_id }: any) => {
 			if (vm_id === vm.id) {
-				console.log('[Terminal] PTY ready:', session_id);
 				setSessionId(session_id);
 			}
 		};
 
 		const handleError = ({ vm_id, error: errorMsg }: any) => {
 			if (vm_id === vm.id) {
-				console.error('[Terminal] PTY error:', errorMsg);
 				setError(errorMsg);
 			}
 		};
@@ -156,7 +154,6 @@ const TerminalTab = React.memo(
 
 		const handleExit = ({ session_id }: any) => {
 			if (session_id === sessionId) {
-				console.log('[Terminal] PTY exited');
 				setSessionId(null);
 				setError('Terminal session closed');
 			}
@@ -181,22 +178,21 @@ const TerminalTab = React.memo(
 		};
 	}, [sessionId]);
 
-	// Handle terminal resize
+	// Handle terminal resize (width only - height is fixed)
 	useEffect(() => {
 		if (!sessionId || !isActive) return;
 
 		const handleResize = () => {
 			const dims = getTerminalDimensions();
-			const { rows, cols } = dims;
-			
+
 			// Resize emulator
 			if (emulatorRef.current) {
-				emulatorRef.current.resize(rows, cols);
+				emulatorRef.current.resize(dims.rows, dims.cols);
 				forceUpdate(); // Re-render with new dimensions
 			}
-			
+
 			// Notify backend
-			ipcClient.resizePTY(vm.id, sessionId, rows, cols);
+			ipcClient.resizePTY(vm.id, sessionId, dims.rows, dims.cols);
 		};
 
 		process.stdout.on('resize', handleResize);
@@ -208,7 +204,6 @@ const TerminalTab = React.memo(
 	// Close PTY only on VM disconnect or status change (NOT on tab switch)
 	useEffect(() => {
 		if (vm.status === 'disconnected' && sessionId) {
-			console.log('[Terminal] VM disconnected, closing PTY');
 			ipcClient.closePTY(vm.id, sessionId);
 			ptyStartedRef.current = false;
 			setSessionId(null);
@@ -338,7 +333,7 @@ const TerminalTab = React.memo(
 							const cursorRow = cursor ? cursor.y : 0;
 							const cursorCol = cursor ? cursor.x : 0;
 							const showCursor = scrollOffset === 0 && sessionId && cursorVisible;
-							
+
 							return emulatorRef.current.getViewport(TERMINAL_ROWS, scrollOffset).map((line, i) => {
 								const isOnThisLine = showCursor && (cursorRow - viewportY === i);
 								
