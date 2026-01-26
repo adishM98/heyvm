@@ -761,7 +761,7 @@ export default function FilesTab({ vm, isActive }: FilesTabProps) {
 	return (
 		<Box flexDirection="column" width="100%">
 			<Box flexDirection="row" flexGrow={1}>
-				<Box flexDirection="column" width="50%" borderStyle="single" borderColor={activePane === 'local' ? 'magenta' : 'gray'}>
+				<Box flexDirection="column" width="50%" borderStyle={activePane === 'local' ? 'double' : 'single'} borderColor={activePane === 'local' ? 'magenta' : 'gray'}>
 					<Text bold color="magenta">Local: {localPath}</Text>
 					<Box flexDirection="row">
 						<Box flexDirection="column" flexGrow={1}>
@@ -774,7 +774,7 @@ export default function FilesTab({ vm, isActive }: FilesTabProps) {
 						)}
 					</Box>
 				</Box>
-				<Box flexDirection="column" width="50%" borderStyle="single" borderColor={activePane === 'remote' ? 'cyan' : 'gray'}>
+				<Box flexDirection="column" width="50%" borderStyle={activePane === 'remote' ? 'double' : 'single'} borderColor={activePane === 'remote' ? 'cyan' : 'gray'}>
 					<Text bold color="cyan">Remote: {remotePath}</Text>
 					<Box flexDirection="row">
 						<Box flexDirection="column" flexGrow={1}>
