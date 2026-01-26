@@ -147,6 +147,37 @@ export default function FilesTab({ vm, isActive }: FilesTabProps) {
 		}
 	}, [activePane, localFiles, remoteFiles, localIndex, remoteIndex, localScroll, remoteScroll, canNavigate]);
 
+	// Mouse wheel scroll handlers - only scroll view, don't change selection
+	const handleMouseWheelUp = useCallback(() => {
+		if (!canNavigate()) return;
+
+		const scroll = activePane === 'local' ? localScroll : remoteScroll;
+		const newScroll = Math.max(scroll - 1, 0);
+
+		if (activePane === 'local') {
+			setLocalScroll(newScroll);
+		} else {
+			setRemoteScroll(newScroll);
+		}
+	}, [activePane, localScroll, remoteScroll, canNavigate]);
+
+	const handleMouseWheelDown = useCallback(() => {
+		if (!canNavigate()) return;
+
+		const files = activePane === 'local' ? localFiles : remoteFiles;
+		const scroll = activePane === 'local' ? localScroll : remoteScroll;
+
+		// Don't scroll past the last screen
+		const maxScroll = Math.max(0, files.length - VISIBLE_FILES);
+		const newScroll = Math.min(scroll + 1, maxScroll);
+
+		if (activePane === 'local') {
+			setLocalScroll(newScroll);
+		} else {
+			setRemoteScroll(newScroll);
+		}
+	}, [activePane, localFiles, remoteFiles, localScroll, remoteScroll, canNavigate]);
+
 	// Mouse click helper types and functions
 	interface ClickTarget {
 		pane: 'local' | 'remote' | null;
@@ -345,15 +376,6 @@ export default function FilesTab({ vm, isActive }: FilesTabProps) {
 			termWidth
 		);
 
-		// Debug logging
-		if (process.env.DEBUG_MOUSE) {
-			const vmListWidth = Math.floor(termWidth * 0.25);
-			const filesTabStart = vmListWidth;
-			const filesTabWidth = termWidth - vmListWidth;
-			const filesPaneMidpoint = filesTabStart + Math.floor(filesTabWidth / 2);
-			console.error(`[HOVER] x=${mouseEvent.x}, termWidth=${termWidth}, vmList=${vmListWidth}, filesStart=${filesTabStart}, filesMidpoint=${filesPaneMidpoint}, pane=${target.pane}`);
-		}
-
 		// Update hover state
 		if (target.isValid && target.pane) {
 			setHoveredFile({
@@ -426,12 +448,12 @@ export default function FilesTab({ vm, isActive }: FilesTabProps) {
 
 			// Handle scroll wheel events
 			if (mouseEvent.button === 64) {
-				// Scroll up - move selection up by 1
-				handleScrollUp();
+				// Scroll up - only scroll view, don't change selection
+				handleMouseWheelUp();
 				return;
 			} else if (mouseEvent.button === 65) {
-				// Scroll down - move selection down by 1
-				handleScrollDown();
+				// Scroll down - only scroll view, don't change selection
+				handleMouseWheelDown();
 				return;
 			}
 
@@ -452,7 +474,7 @@ export default function FilesTab({ vm, isActive }: FilesTabProps) {
 		return () => {
 			process.stdin.off('data', handleData);
 		};
-	}, [isActive, handleScrollUp, handleScrollDown, handleMouseClick, handleMouseMove]);
+	}, [isActive, handleMouseWheelUp, handleMouseWheelDown, handleMouseClick, handleMouseMove]);
 
 	useInput((input, key) => {
 		if (!isActive) return;
