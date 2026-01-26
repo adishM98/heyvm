@@ -35,8 +35,22 @@ export default function FilesTab({ vm, isActive }: FilesTabProps) {
 		bytesTransferred: number;
 		totalBytes: number;
 	} | null>(null);
-	
+	const [lastClickState, setLastClickState] = useState<{
+		time: number;
+		x: number;
+		y: number;
+		button: number;
+		pane: 'local' | 'remote' | null;
+		fileIndex: number;
+	} | null>(null);
+	const [hoveredFile, setHoveredFile] = useState<{
+		pane: 'local' | 'remote';
+		index: number;
+	} | null>(null);
+
 	const navigationThrottle = useRef(Date.now());
+	const DOUBLE_CLICK_THRESHOLD = 300; // ms
+	const DOUBLE_CLICK_POSITION_TOLERANCE = 2; // characters
 
 	// Load local files
 	const loadLocalFiles = useCallback(() => {
@@ -133,6 +147,215 @@ export default function FilesTab({ vm, isActive }: FilesTabProps) {
 		}
 	}, [activePane, localFiles, remoteFiles, localIndex, remoteIndex, localScroll, remoteScroll, canNavigate]);
 
+	// Mouse click helper types and functions
+	interface ClickTarget {
+		pane: 'local' | 'remote' | null;
+		fileIndex: number;      // Absolute index in files array
+		visualRow: number;      // Row within visible area (0-14)
+		isValid: boolean;       // Whether click is on a valid file
+	}
+
+	const mapClickToTarget = useCallback((
+		mouseX: number,
+		mouseY: number,
+		terminalWidth: number
+	): ClickTarget => {
+		const result: ClickTarget = {
+			pane: null,
+			fileIndex: -1,
+			visualRow: -1,
+			isValid: false
+		};
+
+		// Calculate layout metrics
+		// HEADER_OFFSET accounts for: VM list panel + VM header + tabs + borders
+		const HEADER_OFFSET = 20;
+		const PANE_HEADER = 1;
+		const BORDER_WIDTH = 1;
+
+		const leftPadding = 2;
+		const paneWidth = Math.floor((terminalWidth - leftPadding * 2) / 2);
+		const localPaneStart = leftPadding + BORDER_WIDTH;
+		const localPaneEnd = localPaneStart + paneWidth - BORDER_WIDTH;
+		const remotePaneStart = localPaneEnd + BORDER_WIDTH;
+
+		// Determine pane from X coordinate
+		if (mouseX >= localPaneStart && mouseX < localPaneEnd) {
+			result.pane = 'local';
+		} else if (mouseX >= remotePaneStart) {
+			result.pane = 'remote';
+		} else {
+			return result; // Clicked on border or outside
+		}
+
+		// Calculate file list Y bounds
+		const fileListTop = HEADER_OFFSET + PANE_HEADER + BORDER_WIDTH;
+		const fileListBottom = fileListTop + VISIBLE_FILES;
+
+		// Check if click is within file list area
+		if (mouseY < fileListTop || mouseY >= fileListBottom) {
+			return result; // Clicked on header or outside
+		}
+
+		// Calculate file index
+		result.visualRow = mouseY - fileListTop;
+		const files = result.pane === 'local' ? localFiles : remoteFiles;
+		const scroll = result.pane === 'local' ? localScroll : remoteScroll;
+		result.fileIndex = scroll + result.visualRow;
+
+		// Validate
+		result.isValid = result.fileIndex >= 0 && result.fileIndex < files.length;
+
+		return result;
+	}, [localFiles, remoteFiles, localScroll, remoteScroll]);
+
+	const detectClickType = useCallback((
+		currentClick: { time: number; x: number; y: number; button: number }
+	): 'single' | 'double' => {
+		if (!lastClickState) return 'single';
+
+		const timeDelta = currentClick.time - lastClickState.time;
+		const positionDelta = Math.abs(currentClick.x - lastClickState.x) +
+													Math.abs(currentClick.y - lastClickState.y);
+
+		const isDoubleClick =
+			timeDelta < DOUBLE_CLICK_THRESHOLD &&
+			positionDelta < DOUBLE_CLICK_POSITION_TOLERANCE &&
+			currentClick.button === lastClickState.button;
+
+		return isDoubleClick ? 'double' : 'single';
+	}, [lastClickState]);
+
+	const handleSingleClick = useCallback((target: ClickTarget) => {
+		// Switch active pane if clicking on inactive pane
+		if (target.pane !== activePane) {
+			setActivePane(target.pane);
+		}
+
+		// Update selection index
+		if (target.pane === 'local') {
+			setLocalIndex(target.fileIndex);
+		} else {
+			setRemoteIndex(target.fileIndex);
+		}
+	}, [activePane]);
+
+	const handleDoubleClick = useCallback((target: ClickTarget) => {
+		const files = target.pane === 'local' ? localFiles : remoteFiles;
+		const file = files[target.fileIndex];
+
+		// Only navigate if it's a directory
+		if (!file || !file.isDir) return;
+
+		// Switch to clicked pane if not already active
+		if (target.pane !== activePane) {
+			setActivePane(target.pane);
+		}
+
+		// Navigate into directory (reuse Enter key logic)
+		if (target.pane === 'local') {
+			const newPath = file.name === '..'
+				? path.dirname(localPath)
+				: path.join(localPath, file.name);
+			setLocalPath(newPath);
+			setLocalIndex(0);
+			setLocalScroll(0);
+		} else {
+			const newPath = file.name === '..'
+				? remotePath.split('/').slice(0, -1).join('/') || '/'
+				: `${remotePath}/${file.name}`.replace('//', '/');
+			setRemotePath(newPath);
+			setRemoteIndex(0);
+			setRemoteScroll(0);
+		}
+
+		// Clear last click state to prevent triple-click issues
+		setLastClickState(null);
+	}, [activePane, localPath, remotePath, localFiles, remoteFiles]);
+
+	const handleMouseClick = useCallback((mouseEvent: { button: number; x: number; y: number; type: string }) => {
+		// Only handle mouse down events
+		if (mouseEvent.type !== 'down') return;
+
+		// Throttle clicks
+		if (!canNavigate()) return;
+
+		// Ignore clicks during file transfer
+		if (transferring) return;
+
+		const termWidth = process.stdout.columns || 120;
+
+		// Map click to target
+		const target = mapClickToTarget(
+			mouseEvent.x,
+			mouseEvent.y,
+			termWidth
+		);
+
+		// Ignore invalid clicks
+		if (!target.isValid || !target.pane) return;
+
+		const currentTime = Date.now();
+		const clickType = detectClickType({
+			time: currentTime,
+			x: mouseEvent.x,
+			y: mouseEvent.y,
+			button: mouseEvent.button
+		});
+
+		// Update last click state
+		setLastClickState({
+			time: currentTime,
+			x: mouseEvent.x,
+			y: mouseEvent.y,
+			button: mouseEvent.button,
+			pane: target.pane,
+			fileIndex: target.fileIndex
+		});
+
+		// Route to appropriate handler
+		if (clickType === 'single') {
+			handleSingleClick(target);
+		} else {
+			handleDoubleClick(target);
+		}
+	}, [
+		transferring,
+		canNavigate,
+		mapClickToTarget,
+		detectClickType,
+		handleSingleClick,
+		handleDoubleClick
+	]);
+
+	const handleMouseMove = useCallback((mouseEvent: { button: number; x: number; y: number; type: string }) => {
+		// Ignore if transferring
+		if (transferring) {
+			setHoveredFile(null);
+			return;
+		}
+
+		const termWidth = process.stdout.columns || 120;
+
+		// Map mouse position to target
+		const target = mapClickToTarget(
+			mouseEvent.x,
+			mouseEvent.y,
+			termWidth
+		);
+
+		// Update hover state
+		if (target.isValid && target.pane) {
+			setHoveredFile({
+				pane: target.pane,
+				index: target.fileIndex
+			});
+		} else {
+			// Clear hover if mouse is outside file list
+			setHoveredFile(null);
+		}
+	}, [transferring, mapClickToTarget]);
+
 	useEffect(() => {
 		if (!isActive) return;
 		loadLocalFiles();
@@ -171,16 +394,18 @@ export default function FilesTab({ vm, isActive }: FilesTabProps) {
 
 		// Enable SGR extended mouse tracking
 		process.stdout.write('\x1b[?1000h'); // Basic mouse tracking
+		process.stdout.write('\x1b[?1003h'); // Enable mouse motion tracking
 		process.stdout.write('\x1b[?1006h'); // SGR extended format
 
 		return () => {
 			// Disable on cleanup
 			process.stdout.write('\x1b[?1006l');
+			process.stdout.write('\x1b[?1003l');
 			process.stdout.write('\x1b[?1000l');
 		};
 	}, [isActive]);
 
-	// Listen for mouse scroll events on stdin
+	// Listen for mouse events on stdin
 	useEffect(() => {
 		if (!isActive) return;
 
@@ -189,13 +414,26 @@ export default function FilesTab({ vm, isActive }: FilesTabProps) {
 
 			if (!mouseEvent) return; // Not a mouse event
 
-			// Only handle scroll wheel events
+			// Handle scroll wheel events
 			if (mouseEvent.button === 64) {
 				// Scroll up - move selection up by 1
 				handleScrollUp();
+				return;
 			} else if (mouseEvent.button === 65) {
 				// Scroll down - move selection down by 1
 				handleScrollDown();
+				return;
+			}
+
+			// Handle left click events (button 0)
+			if (mouseEvent.button === 0) {
+				handleMouseClick(mouseEvent);
+				return;
+			}
+
+			// Handle mouse motion events (button 32 or 35 for motion without button pressed)
+			if (mouseEvent.button === 32 || mouseEvent.button === 35) {
+				handleMouseMove(mouseEvent);
 			}
 		};
 
@@ -204,7 +442,7 @@ export default function FilesTab({ vm, isActive }: FilesTabProps) {
 		return () => {
 			process.stdin.off('data', handleData);
 		};
-	}, [isActive, handleScrollUp, handleScrollDown]);
+	}, [isActive, handleScrollUp, handleScrollDown, handleMouseClick, handleMouseMove]);
 
 	useInput((input, key) => {
 		if (!isActive) return;
@@ -390,12 +628,24 @@ export default function FilesTab({ vm, isActive }: FilesTabProps) {
 		return visible.map((file, i) => {
 			const actualIndex = scrollOffset + i;
 			const isSelected = actualIndex === selectedIndex && isActivPane;
+			const isHovered = hoveredFile?.pane === pane && hoveredFile?.index === actualIndex;
 			const icon = file.isDir ? '📁' : '📄';
 			const prefix = isSelected ? '▶ ' : '  ';
-			const color = isSelected ? (pane === 'local' ? 'magenta' : 'cyan') : undefined;
+
+			// Color priority: selected > hovered > default
+			let color = undefined;
+			let backgroundColor = undefined;
+			const paneColor = pane === 'local' ? 'magenta' : 'cyan';
+
+			if (isSelected) {
+				color = paneColor;
+			} else if (isHovered) {
+				color = paneColor;
+				backgroundColor = 'blackBright';
+			}
 
 			return (
-				<Text key={actualIndex} bold={isSelected} color={color}>
+				<Text key={actualIndex} bold={isSelected} color={color} backgroundColor={backgroundColor}>
 					{prefix}{icon} {file.name}
 				</Text>
 			);
