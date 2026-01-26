@@ -80,6 +80,8 @@ export default function App() {
 	};
 
 	// Global keyboard handler
+	// NOTE: When terminal tab is active, ALL input (including Ctrl+C) goes to terminal
+	// Only Ctrl+O can exit the terminal tab back to overview
 	useInput((input, key) => {
 		// Modal takes precedence
 		if (showAddVMModal) return;
@@ -90,9 +92,16 @@ export default function App() {
 			return;
 		}
 
-		// Terminal has complete input priority - don't intercept ANYTHING when terminal is active
+		// Terminal has COMPLETE input priority - don't intercept ANYTHING when terminal is active
+		// This includes Ctrl+C, Ctrl+D, Escape, etc. - everything goes to the PTY
 		if (activePaneSide === 'right' && selectedVM && activeTab === 'terminal') {
 			return; // Let terminal handle all input
+		}
+
+		// Ctrl+C: Quit app (only when NOT in terminal tab)
+		if (key.ctrl && input === 'c') {
+			exit();
+			return;
 		}
 
 		// Global quit (only from left pane with no selection)

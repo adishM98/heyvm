@@ -32,20 +32,20 @@ export default React.memo(function VMDetailScreen({ vm, activeTab, onTabChange, 
 		switch (activeTab) {
 			case 'overview':
 				return (
-					<Text dimColor>
-						<Text bold>c</Text> connect • <Text bold>d</Text> disconnect • <Text bold>1/2/3</Text> tabs • <Text bold>Esc</Text> back
+					<Text>
+						<Text bold color="cyan">c</Text> <Text color="green">connect</Text> • <Text bold color="cyan">d</Text> <Text color="green">disconnect</Text> • <Text bold color="cyan">1/2/3</Text> <Text color="green">tabs</Text> • <Text bold color="cyan">Esc</Text> <Text color="green">back</Text>
 					</Text>
 				);
 			case 'terminal':
 				return (
-					<Text dimColor>
-						<Text bold>PgUp/PgDn</Text> or <Text bold>Shift+↑↓</Text> scroll • <Text bold>Ctrl+O</Text> overview • <Text bold>Esc</Text> back
+					<Text>
+						<Text bold color="cyan">PgUp/PgDn</Text> or <Text bold color="cyan">Shift+↑↓</Text> <Text color="green">scroll</Text> • <Text bold color="cyan">Ctrl+O</Text> <Text color="green">exit terminal</Text> • <Text bold color="cyan">Esc</Text> <Text color="green">back</Text>
 					</Text>
 				);
 			case 'files':
 				return (
-					<Text dimColor>
-						<Text bold>j/k</Text> navigate • <Text bold>Tab</Text> pane • <Text bold>p</Text> push • <Text bold>g</Text> get • <Text bold>/</Text> search • <Text bold>r</Text> refresh • <Text bold>Esc</Text> back
+					<Text>
+						<Text bold color="cyan">j/k</Text> <Text color="green">navigate</Text> • <Text bold color="cyan">Tab</Text> <Text color="green">pane</Text> • <Text bold color="cyan">p</Text> <Text color="green">push</Text> • <Text bold color="cyan">g</Text> <Text color="green">get</Text> • <Text bold color="cyan">/</Text> <Text color="green">search</Text> • <Text bold color="cyan">r</Text> <Text color="green">refresh</Text> • <Text bold color="cyan">Esc</Text> <Text color="green">back</Text>
 					</Text>
 				);
 			default:

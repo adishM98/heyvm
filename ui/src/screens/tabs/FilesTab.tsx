@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { VM, FileInfo } from '../../core/types.js';
 import { ipcClient } from '../../core/ipc.js';
+import { parseMouseEvent } from '../../utils/mouseParser.js';
 
 interface FilesTabProps {
 	vm: VM;
@@ -34,8 +35,22 @@ export default function FilesTab({ vm, isActive }: FilesTabProps) {
 		bytesTransferred: number;
 		totalBytes: number;
 	} | null>(null);
-	
+	const [lastClickState, setLastClickState] = useState<{
+		time: number;
+		x: number;
+		y: number;
+		button: number;
+		pane: 'local' | 'remote' | null;
+		fileIndex: number;
+	} | null>(null);
+	const [hoveredFile, setHoveredFile] = useState<{
+		pane: 'local' | 'remote';
+		index: number;
+	} | null>(null);
+
 	const navigationThrottle = useRef(Date.now());
+	const DOUBLE_CLICK_THRESHOLD = 300; // ms
+	const DOUBLE_CLICK_POSITION_TOLERANCE = 2; // characters
 
 	// Load local files
 	const loadLocalFiles = useCallback(() => {
@@ -70,13 +85,308 @@ export default function FilesTab({ vm, isActive }: FilesTabProps) {
 	// Load remote files
 	const loadRemoteFiles = useCallback(() => {
 		if (vm.status !== 'connected') return;
-		
+
 		ipcClient.listFiles(vm.id, remotePath).then((files) => {
 			setRemoteFiles(files);
 		}).catch((err) => {
 			setError(`Failed to list remote ${remotePath}: ${err.message}`);
 		});
 	}, [vm.id, vm.status, remotePath]);
+
+	// Throttled navigation
+	const canNavigate = useCallback(() => {
+		const now = Date.now();
+		if (now - navigationThrottle.current < 30) return false;
+		navigationThrottle.current = now;
+		return true;
+	}, []);
+
+	// Scroll up handler for mouse wheel
+	const handleScrollUp = useCallback(() => {
+		if (!canNavigate()) return;
+
+		const files = activePane === 'local' ? localFiles : remoteFiles;
+		const index = activePane === 'local' ? localIndex : remoteIndex;
+		const scroll = activePane === 'local' ? localScroll : remoteScroll;
+
+		const newIndex = Math.max(index - 1, 0);
+
+		if (activePane === 'local') {
+			setLocalIndex(newIndex);
+			if (newIndex < scroll) {
+				setLocalScroll(Math.max(scroll - 1, 0));
+			}
+		} else {
+			setRemoteIndex(newIndex);
+			if (newIndex < scroll) {
+				setRemoteScroll(Math.max(scroll - 1, 0));
+			}
+		}
+	}, [activePane, localFiles, remoteFiles, localIndex, remoteIndex, localScroll, remoteScroll, canNavigate]);
+
+	// Scroll down handler for mouse wheel
+	const handleScrollDown = useCallback(() => {
+		if (!canNavigate()) return;
+
+		const files = activePane === 'local' ? localFiles : remoteFiles;
+		const index = activePane === 'local' ? localIndex : remoteIndex;
+		const scroll = activePane === 'local' ? localScroll : remoteScroll;
+
+		const newIndex = Math.min(index + 1, files.length - 1);
+
+		if (activePane === 'local') {
+			setLocalIndex(newIndex);
+			if (newIndex >= scroll + VISIBLE_FILES) {
+				setLocalScroll(scroll + 1);
+			}
+		} else {
+			setRemoteIndex(newIndex);
+			if (newIndex >= scroll + VISIBLE_FILES) {
+				setRemoteScroll(scroll + 1);
+			}
+		}
+	}, [activePane, localFiles, remoteFiles, localIndex, remoteIndex, localScroll, remoteScroll, canNavigate]);
+
+	// Mouse wheel scroll handlers - only scroll view, don't change selection
+	const handleMouseWheelUp = useCallback(() => {
+		if (!canNavigate()) return;
+
+		const scroll = activePane === 'local' ? localScroll : remoteScroll;
+		const newScroll = Math.max(scroll - 1, 0);
+
+		if (activePane === 'local') {
+			setLocalScroll(newScroll);
+		} else {
+			setRemoteScroll(newScroll);
+		}
+	}, [activePane, localScroll, remoteScroll, canNavigate]);
+
+	const handleMouseWheelDown = useCallback(() => {
+		if (!canNavigate()) return;
+
+		const files = activePane === 'local' ? localFiles : remoteFiles;
+		const scroll = activePane === 'local' ? localScroll : remoteScroll;
+
+		// Don't scroll past the last screen
+		const maxScroll = Math.max(0, files.length - VISIBLE_FILES);
+		const newScroll = Math.min(scroll + 1, maxScroll);
+
+		if (activePane === 'local') {
+			setLocalScroll(newScroll);
+		} else {
+			setRemoteScroll(newScroll);
+		}
+	}, [activePane, localFiles, remoteFiles, localScroll, remoteScroll, canNavigate]);
+
+	// Mouse click helper types and functions
+	interface ClickTarget {
+		pane: 'local' | 'remote' | null;
+		fileIndex: number;      // Absolute index in files array
+		visualRow: number;      // Row within visible area (0-14)
+		isValid: boolean;       // Whether click is on a valid file
+	}
+
+	const mapClickToTarget = useCallback((
+		mouseX: number,
+		mouseY: number,
+		terminalWidth: number
+	): ClickTarget => {
+		const result: ClickTarget = {
+			pane: null,
+			fileIndex: -1,
+			visualRow: -1,
+			isValid: false
+		};
+
+		// Calculate layout metrics
+		// HEADER_OFFSET accounts for: VM list panel + VM header + tabs + borders
+		const HEADER_OFFSET = 20;
+		const PANE_HEADER = 1;
+		const BORDER_WIDTH = 1;
+
+		// VM list panel takes up ~25% of terminal width on the left
+		// Files tab starts after VM list panel
+		const vmListWidth = Math.floor(terminalWidth * 0.25);
+		const filesTabStart = vmListWidth;
+		const filesTabWidth = terminalWidth - vmListWidth;
+
+		// Midpoint between the two file panes (within the Files tab area)
+		const filesPaneMidpoint = filesTabStart + Math.floor(filesTabWidth / 2);
+
+		// Determine pane from X coordinate
+		if (mouseX < filesPaneMidpoint) {
+			result.pane = 'local';
+		} else {
+			result.pane = 'remote';
+		}
+
+		// Calculate file list Y bounds
+		const fileListTop = HEADER_OFFSET + PANE_HEADER + BORDER_WIDTH;
+		const fileListBottom = fileListTop + VISIBLE_FILES;
+
+		// Check if click is within file list area
+		if (mouseY < fileListTop || mouseY >= fileListBottom) {
+			return result; // Clicked on header or outside
+		}
+
+		// Calculate file index
+		result.visualRow = mouseY - fileListTop;
+		const files = result.pane === 'local' ? localFiles : remoteFiles;
+		const scroll = result.pane === 'local' ? localScroll : remoteScroll;
+		result.fileIndex = scroll + result.visualRow;
+
+		// Validate
+		result.isValid = result.fileIndex >= 0 && result.fileIndex < files.length;
+
+		return result;
+	}, [localFiles, remoteFiles, localScroll, remoteScroll]);
+
+	const detectClickType = useCallback((
+		currentClick: { time: number; x: number; y: number; button: number }
+	): 'single' | 'double' => {
+		if (!lastClickState) return 'single';
+
+		const timeDelta = currentClick.time - lastClickState.time;
+		const positionDelta = Math.abs(currentClick.x - lastClickState.x) +
+													Math.abs(currentClick.y - lastClickState.y);
+
+		const isDoubleClick =
+			timeDelta < DOUBLE_CLICK_THRESHOLD &&
+			positionDelta < DOUBLE_CLICK_POSITION_TOLERANCE &&
+			currentClick.button === lastClickState.button;
+
+		return isDoubleClick ? 'double' : 'single';
+	}, [lastClickState]);
+
+	const handleSingleClick = useCallback((target: ClickTarget) => {
+		// Switch active pane if clicking on inactive pane
+		if (target.pane !== activePane) {
+			setActivePane(target.pane);
+		}
+
+		// Update selection index
+		if (target.pane === 'local') {
+			setLocalIndex(target.fileIndex);
+		} else {
+			setRemoteIndex(target.fileIndex);
+		}
+	}, [activePane]);
+
+	const handleDoubleClick = useCallback((target: ClickTarget) => {
+		const files = target.pane === 'local' ? localFiles : remoteFiles;
+		const file = files[target.fileIndex];
+
+		// Only navigate if it's a directory
+		if (!file || !file.isDir) return;
+
+		// Switch to clicked pane if not already active
+		if (target.pane !== activePane) {
+			setActivePane(target.pane);
+		}
+
+		// Navigate into directory (reuse Enter key logic)
+		if (target.pane === 'local') {
+			const newPath = file.name === '..'
+				? path.dirname(localPath)
+				: path.join(localPath, file.name);
+			setLocalPath(newPath);
+			setLocalIndex(0);
+			setLocalScroll(0);
+		} else {
+			const newPath = file.name === '..'
+				? remotePath.split('/').slice(0, -1).join('/') || '/'
+				: `${remotePath}/${file.name}`.replace('//', '/');
+			setRemotePath(newPath);
+			setRemoteIndex(0);
+			setRemoteScroll(0);
+		}
+
+		// Clear last click state to prevent triple-click issues
+		setLastClickState(null);
+	}, [activePane, localPath, remotePath, localFiles, remoteFiles]);
+
+	const handleMouseClick = useCallback((mouseEvent: { button: number; x: number; y: number; type: string }) => {
+		// Only handle mouse down events
+		if (mouseEvent.type !== 'down') return;
+
+		// Throttle clicks
+		if (!canNavigate()) return;
+
+		// Ignore clicks during file transfer
+		if (transferring) return;
+
+		const termWidth = process.stdout.columns || 120;
+
+		// Map click to target
+		const target = mapClickToTarget(
+			mouseEvent.x,
+			mouseEvent.y,
+			termWidth
+		);
+
+		// Ignore invalid clicks
+		if (!target.isValid || !target.pane) return;
+
+		const currentTime = Date.now();
+		const clickType = detectClickType({
+			time: currentTime,
+			x: mouseEvent.x,
+			y: mouseEvent.y,
+			button: mouseEvent.button
+		});
+
+		// Update last click state
+		setLastClickState({
+			time: currentTime,
+			x: mouseEvent.x,
+			y: mouseEvent.y,
+			button: mouseEvent.button,
+			pane: target.pane,
+			fileIndex: target.fileIndex
+		});
+
+		// Route to appropriate handler
+		if (clickType === 'single') {
+			handleSingleClick(target);
+		} else {
+			handleDoubleClick(target);
+		}
+	}, [
+		transferring,
+		canNavigate,
+		mapClickToTarget,
+		detectClickType,
+		handleSingleClick,
+		handleDoubleClick
+	]);
+
+	const handleMouseMove = useCallback((mouseEvent: { button: number; x: number; y: number; type: string }) => {
+		// Ignore if transferring
+		if (transferring) {
+			setHoveredFile(null);
+			return;
+		}
+
+		const termWidth = process.stdout.columns || 120;
+
+		// Map mouse position to target
+		const target = mapClickToTarget(
+			mouseEvent.x,
+			mouseEvent.y,
+			termWidth
+		);
+
+		// Update hover state
+		if (target.isValid && target.pane) {
+			setHoveredFile({
+				pane: target.pane,
+				index: target.fileIndex
+			});
+		} else {
+			// Clear hover if mouse is outside file list
+			setHoveredFile(null);
+		}
+	}, [transferring, mapClickToTarget]);
 
 	useEffect(() => {
 		if (!isActive) return;
@@ -110,13 +420,61 @@ export default function FilesTab({ vm, isActive }: FilesTabProps) {
 		};
 	}, [vm.id]);
 
-	// Throttled navigation
-	const canNavigate = useCallback(() => {
-		const now = Date.now();
-		if (now - navigationThrottle.current < 30) return false;
-		navigationThrottle.current = now;
-		return true;
-	}, []);
+	// Enable SGR mouse tracking when tab is active
+	useEffect(() => {
+		if (!isActive) return;
+
+		// Enable SGR extended mouse tracking
+		process.stdout.write('\x1b[?1000h'); // Basic mouse tracking
+		process.stdout.write('\x1b[?1003h'); // Enable mouse motion tracking
+		process.stdout.write('\x1b[?1006h'); // SGR extended format
+
+		return () => {
+			// Disable on cleanup
+			process.stdout.write('\x1b[?1006l');
+			process.stdout.write('\x1b[?1003l');
+			process.stdout.write('\x1b[?1000l');
+		};
+	}, [isActive]);
+
+	// Listen for mouse events on stdin
+	useEffect(() => {
+		if (!isActive) return;
+
+		const handleData = (data: Buffer) => {
+			const mouseEvent = parseMouseEvent(data);
+
+			if (!mouseEvent) return; // Not a mouse event
+
+			// Handle scroll wheel events
+			if (mouseEvent.button === 64) {
+				// Scroll up - only scroll view, don't change selection
+				handleMouseWheelUp();
+				return;
+			} else if (mouseEvent.button === 65) {
+				// Scroll down - only scroll view, don't change selection
+				handleMouseWheelDown();
+				return;
+			}
+
+			// Handle left click events (button 0)
+			if (mouseEvent.button === 0) {
+				handleMouseClick(mouseEvent);
+				return;
+			}
+
+			// Handle mouse motion events (button 32 or 35 for motion without button pressed)
+			if (mouseEvent.button === 32 || mouseEvent.button === 35) {
+				handleMouseMove(mouseEvent);
+			}
+		};
+
+		process.stdin.on('data', handleData);
+
+		return () => {
+			process.stdin.off('data', handleData);
+		};
+	}, [isActive, handleMouseWheelUp, handleMouseWheelDown, handleMouseClick, handleMouseMove]);
 
 	useInput((input, key) => {
 		if (!isActive) return;
@@ -298,20 +656,75 @@ export default function FilesTab({ vm, isActive }: FilesTabProps) {
 	const renderFileList = (files: FileInfo[], selectedIndex: number, scrollOffset: number, pane: 'local' | 'remote') => {
 		const visible = files.slice(scrollOffset, scrollOffset + VISIBLE_FILES);
 		const isActivPane = activePane === pane;
-		
+
 		return visible.map((file, i) => {
 			const actualIndex = scrollOffset + i;
 			const isSelected = actualIndex === selectedIndex && isActivPane;
+			const isHovered = hoveredFile?.pane === pane && hoveredFile?.index === actualIndex;
 			const icon = file.isDir ? '📁' : '📄';
 			const prefix = isSelected ? '▶ ' : '  ';
-			const color = isSelected ? (pane === 'local' ? 'magenta' : 'cyan') : undefined;
-			
+
+			// Color priority: selected > hovered > default
+			let color = undefined;
+			let backgroundColor = undefined;
+			let inverse = false;
+			const paneColor = pane === 'local' ? 'magenta' : 'cyan';
+
+			if (isSelected) {
+				color = paneColor;
+			} else if (isHovered) {
+				color = paneColor;
+				inverse = true;
+			}
+
 			return (
-				<Text key={actualIndex} bold={isSelected} color={color}>
+				<Text key={actualIndex} bold={isSelected} color={color} inverse={inverse}>
 					{prefix}{icon} {file.name}
 				</Text>
 			);
 		});
+	};
+
+	const renderScrollbar = (
+		scrollOffset: number,
+		totalFiles: number,
+		visibleFiles: number,
+		isActive: boolean,
+		pane: 'local' | 'remote'
+	) => {
+		// Don't show scrollbar if all files fit in view
+		if (totalFiles <= visibleFiles) {
+			return null;
+		}
+
+		const scrollableRange = totalFiles - visibleFiles;
+
+		// Calculate thumb size (proportional to visible/total ratio)
+		const thumbHeight = Math.max(1, Math.ceil((visibleFiles / totalFiles) * visibleFiles));
+
+		// Calculate thumb position within the track
+		const maxThumbPosition = visibleFiles - thumbHeight;
+		const thumbPosition = scrollableRange > 0
+			? Math.floor((scrollOffset / scrollableRange) * maxThumbPosition)
+			: 0;
+
+		// Determine color based on active state
+		const color = isActive
+			? (pane === 'local' ? 'magenta' : 'cyan')
+			: 'gray';
+
+		// Generate scrollbar rows (one per visible file row)
+		const scrollbarRows = [];
+		for (let i = 0; i < visibleFiles; i++) {
+			const isThumb = i >= thumbPosition && i < thumbPosition + thumbHeight;
+			scrollbarRows.push(
+				<Text key={i} color={color}>
+					{isThumb ? '█' : '░'}
+				</Text>
+			);
+		}
+
+		return scrollbarRows;
 	};
 
 	const renderProgressBar = (percent: number, width: number = 30) => {
@@ -348,16 +761,30 @@ export default function FilesTab({ vm, isActive }: FilesTabProps) {
 	return (
 		<Box flexDirection="column" width="100%">
 			<Box flexDirection="row" flexGrow={1}>
-				<Box flexDirection="column" width="50%" borderStyle="single" borderColor={activePane === 'local' ? 'magenta' : 'gray'}>
+				<Box flexDirection="column" width="50%" borderStyle={activePane === 'local' ? 'double' : 'single'} borderColor={activePane === 'local' ? 'magenta' : 'gray'}>
 					<Text bold color="magenta">Local: {localPath}</Text>
-					<Box flexDirection="column">
-						{renderFileList(localFiles, localIndex, localScroll, 'local')}
+					<Box flexDirection="row">
+						<Box flexDirection="column" flexGrow={1}>
+							{renderFileList(localFiles, localIndex, localScroll, 'local')}
+						</Box>
+						{localFiles.length > VISIBLE_FILES && (
+							<Box flexDirection="column" width={1}>
+								{renderScrollbar(localScroll, localFiles.length, VISIBLE_FILES, activePane === 'local', 'local')}
+							</Box>
+						)}
 					</Box>
 				</Box>
-				<Box flexDirection="column" width="50%" borderStyle="single" borderColor={activePane === 'remote' ? 'cyan' : 'gray'}>
+				<Box flexDirection="column" width="50%" borderStyle={activePane === 'remote' ? 'double' : 'single'} borderColor={activePane === 'remote' ? 'cyan' : 'gray'}>
 					<Text bold color="cyan">Remote: {remotePath}</Text>
-					<Box flexDirection="column">
-						{renderFileList(remoteFiles, remoteIndex, remoteScroll, 'remote')}
+					<Box flexDirection="row">
+						<Box flexDirection="column" flexGrow={1}>
+							{renderFileList(remoteFiles, remoteIndex, remoteScroll, 'remote')}
+						</Box>
+						{remoteFiles.length > VISIBLE_FILES && (
+							<Box flexDirection="column" width={1}>
+								{renderScrollbar(remoteScroll, remoteFiles.length, VISIBLE_FILES, activePane === 'remote', 'remote')}
+							</Box>
+						)}
 					</Box>
 				</Box>
 			</Box>

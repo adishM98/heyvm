@@ -63,9 +63,12 @@ export class TerminalEmulator {
 		// Calculate viewport start: go back by scrollOffset from current viewport
 		const viewportStart = Math.max(0, buffer.viewportY - scrollOffset);
 		
+		// Optimized: Pre-allocate array and use direct assignment
+		viewport.length = numRows;
 		for (let i = 0; i < numRows; i++) {
 			const line = buffer.getLine(viewportStart + i);
-			viewport.push(line ? line.translateToString(true) : '');
+			// trimEnd() for better performance - remove trailing whitespace
+			viewport[i] = line ? line.translateToString(true).trimEnd() : '';
 		}
 		
 		return viewport;
