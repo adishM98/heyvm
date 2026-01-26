@@ -25,39 +25,6 @@ A zero-config, interactive terminal UI to connect, manage, and transfer files to
 - **Multiple Auth Methods**: Support for SSH keys and password authentication
 - **Zero Config**: No configuration files to write - just add a VM and go
 
-## Architecture
-
-heyvm uses a modern two-tier architecture with clean separation of concerns:
-
-1. **UI Layer** (TypeScript + Ink) - Interactive terminal interface
-2. **Core Backend** (Go) - SSH/SFTP operations, VM management, and credential storage
-
-These components communicate via **JSON-RPC over stdio**, providing process isolation, clear API boundaries, and easy debugging.
-
-```
-┌──────────────────────────────┐
-│     Ink TUI (TypeScript)     │
-│  - Split-pane interface      │
-│  - VM list & detail screens  │
-│  - File browser              │
-│  - Terminal view             │
-│  - Forms & dialogs           │
-└──────────────┬───────────────┘
-               │ JSON-RPC (stdio)
-┌──────────────▼───────────────┐
-│   heyvm-core (Go Backend)    │
-│  - SSH session manager       │
-│  - SFTP file operations      │
-│  - VM registry & config      │
-│  - Secure auth handling      │
-│  - OS keychain integration   │
-└──────────────┬───────────────┘
-               │ SSH/SFTP
-         ┌─────▼──────┐
-         │ Remote VMs │
-         └────────────┘
-```
-
 ## Quick Start
 
 ### Prerequisites
