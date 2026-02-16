@@ -1,4 +1,4 @@
-.PHONY: help build-ui build-core build-all dev clean install test
+.PHONY: help build-ui build-core build-tui build-all dev run-tui clean install test
 
 help:
 	@echo "heyvm - Interactive SSH VM Manager"
@@ -7,8 +7,10 @@ help:
 	@echo "  install     - Install dependencies (UI + Core)"
 	@echo "  build-ui    - Build UI (TypeScript/Ink)"
 	@echo "  build-core  - Build Core backend (Go)"
+	@echo "  build-tui   - Build Go TUI frontend"
 	@echo "  build-all   - Build all components"
-	@echo "  dev         - Run in development mode"
+	@echo "  run-tui     - Build core + TUI, then run the Go TUI"
+	@echo "  dev         - Run in development mode (TypeScript UI)"
 	@echo "  test        - Run tests"
 	@echo "  clean       - Clean build artifacts"
 	@echo "  help        - Show this help message"
@@ -30,7 +32,16 @@ build-core:
 	cd core && go build -o ../bin/heyvm-core ./cmd/heyvm-core
 	@echo "Core backend build complete! Binary: bin/heyvm-core"
 
-build-all: build-core build-ui
+build-tui:
+	@echo "Building Go TUI frontend..."
+	cd tui && go build -o ../bin/heyvm-tui ./cmd/heyvm-tui
+	@echo "TUI build complete! Binary: bin/heyvm-tui"
+
+run-tui: build-core build-tui
+	@echo "Starting heyvm Go TUI..."
+	./bin/heyvm-tui
+
+build-all: build-core build-ui build-tui
 	@echo "Full build complete!"
 
 dev:
